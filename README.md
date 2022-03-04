@@ -3,5 +3,6 @@
 * Google Statcast data will also be leveraged to bolster results
 
 
-# Scoring Metric
-* W
+# Scoring Metrics
+* In 5x5 Roto Scoring values for each of the categories are not clear
+* 
