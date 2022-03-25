@@ -29,7 +29,7 @@ Estimated with R Studio
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = 'C:\Users\Admin\Documents\Learning Python Folder1\Python Essence Training\Fantasy-Baseball')
+knitr::opts_knit$set(root.dir = 'C:/Users/Admin/Documents/Learning Python Folder1/Python Essence Training/Fantasy-Baseball')
 options(knitr.table.format = "html") 
 options(digits=2)
 ```
@@ -76,7 +76,8 @@ library(gridExtra) #additional grid functionality
 library(janitor) #one function used to clean transposed data set
 library(ggpubr) #for qq plot
 library(tableHTML)
-library(kableExtra)
+library
+library(owmr)
 ```
 
 The \# comments generally explain what additional functionality each library adds to R
@@ -481,10 +482,30 @@ shapiro.test(df_batting_init2$Worth)
 ***  
 
 
-## 2021 Player Rankings  
+## 2021 Player Rankings per Plate Appearance 
 ### 2021 Player Rankings - Top Worth Players with OPS
 Total Rankings for the players (Using 5x5 Scoring) can be found [here]()  
 ```{r,warning=FALSE}
+
+#Categories I include are:
+#Runs (R), Home Runs (HR), Runs Batted In (RBI), Stolen Bases (SB), Batting Average (AVG), On-base + Slugging Percentage (OPS)
+
+df_batting_init2 =  df_batting_init %>%
+#  arrange(player_id,year) %>% 
+  group_by(Season) %>% 
+  mutate(
+    Runs_share = order(order(rank(R_PA,ties.method = 'average'),decreasing = FALSE))/n(),
+     HR_share = order(order(rank(HR_PA,ties.method = 'average'),decreasing = FALSE))/n(),
+     RBI_share = order(order(rank(RBI_PA,ties.method = 'average'),decreasing = FALSE))/n(),
+     SB_share = order(order(rank(SB_PA,ties.method = 'average'),decreasing = FALSE))/n(),
+     AVG_share = order(order(rank(AVG,ties.method = 'average'),decreasing = FALSE))/n(),
+    OPS_share = order(order(rank(OPS,ties.method = 'average'),decreasing = FALSE))/n(),
+    Worth = Runs_share+HR_share+RBI_share+SB_share+AVG_share+OPS_share
+    ) %>% 
+  ungroup() %>% 
+select(-R_PA,-HR_PA,-RBI_PA,-SB_PA,-AVG,-OPS)
+
+
 
 options(digits=2)
 
@@ -505,6 +526,52 @@ df_batting_init2021 %>%
 
 
 ***  
+
+## 2021 Player Rankings Total EoY Ranks   
+### 2021 Player Rankings - Top Worth Players with OPS   
+Total Rankings for the players (Using 5x5 Scoring) can be found [here]()  
+```{r,warning=FALSE}
+
+
+#Categories I include are:
+#Runs (R), Home Runs (HR), Runs Batted In (RBI), Stolen Bases (SB), Batting Average (AVG), On-base + Slugging Percentage (OPS)
+
+df_batting_init_raw =  Batter_data3 %>%
+#  arrange(player_id,year) %>% 
+  group_by(Season) %>% 
+  mutate(
+    Runs_share = order(order(rank(R,ties.method = 'average'),decreasing = FALSE))/n(),
+     HR_share = order(order(rank(HR,ties.method = 'average'),decreasing = FALSE))/n(),
+     RBI_share = order(order(rank(RBI,ties.method = 'average'),decreasing = FALSE))/n(),
+     SB_share = order(order(rank(SB,ties.method = 'average'),decreasing = FALSE))/n(),
+     AVG_share = order(order(rank(AVG,ties.method = 'average'),decreasing = FALSE))/n(),
+    OPS_share = order(order(rank(OPS,ties.method = 'average'),decreasing = FALSE))/n(),
+    Worth = Runs_share+HR_share+RBI_share+SB_share+AVG_share+OPS_share
+    ) %>% 
+  ungroup() %>% 
+select(-R,-HR,-RBI,-SB,-AVG,-OPS)
+
+
+
+options(digits=2)
+
+df_batting_init2021_raw =
+df_batting_init_raw %>% 
+  group_by(Name) %>% 
+  filter(Season == 2021) %>% 
+  arrange(desc(Worth)) %>% 
+  select(Name,Runs_share,HR_share,RBI_share, SB_share,OPS_share,AVG_share,Worth)
+
+
+df_batting_init2021_raw %>%
+  filter (Worth>3.9) %>% 
+  kbl() %>% 
+ kable_material(c("striped", "hover","condensed","responsive"),full_width = F,fixed_thead = T)
+
+
+```
+
+
 
 
 # Creating Model File   
@@ -575,7 +642,7 @@ head(score_frame)
 
 tr_treated_2021 <- vtreat::prepare(treat_plan_2021, tr_2021)
 te_treated_2021 <- vtreat::prepare(treat_plan_2021, te_2021)
-
+total_treated_2021 <- vtreat::prepare(treat_plan_2021, df_batting_final)
 
 #tr_treated = tr
 #te_treated = te
@@ -1084,14 +1151,23 @@ unscalevi24
 #write_csv(unscalevi24,"unscalevi24.csv")
 
 ```
+3. Save the model
+```{r}
+
+save(xgb_model_2022,file = '2022_Hitting6x6_Model.Rdata')
+
+```
+
 
 
 ## Get 2022 list of players
 
-
+Data for Fantasy Pros Ranking can be found[here.](https://www.fangraphs.com/projections.aspx?pos=all&stats=pit&type=atc&team=0&lg=all&players=0)  
+*Data downloaded on 3-25-2022*
 ```{r}
+#Note WAR Rankings are the Rankings, from ATC
 
-Latest_2022_playerdata_FP = read_csv("FantasyPros_Fantasy_Baseball_Rankings_ALL.csv")
+Latest_2022_playerdata_FP = read_csv("FanGraph_Fantasy_Baseball_Hitting.csv")
 
 head(Latest_2022_playerdata_FP)
 

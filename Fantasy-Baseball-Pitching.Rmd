@@ -29,9 +29,10 @@ Estimated with R Studio
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = 'C:\Users\Admin\Documents\Learning Python Folder1\Python Essence Training\Fantasy-Baseball')
+knitr::opts_knit$set(root.dir = 'C:/Users/Admin/Documents/Learning Python Folder1/Python Essence Training/Fantasy-Baseball')
 options(knitr.table.format = "html") 
 options(digits=2)
+options(scipen = 100)
 ```
 
 # Project Scope
@@ -77,6 +78,7 @@ library(janitor) #one function used to clean transposed data set
 library(ggpubr) #for qq plot
 library(tableHTML)
 library(kableExtra)
+library(owmr)
 ```
 
 The \# comments generally explain what additional functionality each library adds to R
@@ -126,7 +128,7 @@ skim(FDG_Team2) %>%
 
 #Full Dataset dimensions
 
-skimr::skim(Batter_data) %>% 
+skimr::skim(pitcher_data) %>% 
   tibble::as_tibble() %>% 
   select(skim_type,skim_variable,complete_rate) %>% 
   filter(complete_rate >0.30) #288 Variables
@@ -142,17 +144,17 @@ Additionally let's look at how variables vary by year to see if there are any di
 ```{r}
 
 #It looks like one year, there were fewer games played, and there is a clear drop off in home runs
-Batter_data_dist =
-Batter_data %>% 
+pitcher_data_dist =
+pitcher_data %>% 
  group_by(Season) %>% 
-  summarize (Games_played = max(G),
-             Avg_HR= mean(HR)
+  summarize (Max_Games = max(G),
+             Avg_W= mean(W)
              )
-Batter_data_dist
+pitcher_data_dist
 
-ggplot(Batter_data_dist, aes(Season, Avg_HR)) +
+ggplot(pitcher_data_dist, aes(Season, Avg_W)) +
   geom_col()+
-  ggtitle("Average Home Runs by Year")+
+  ggtitle("Average Wins by Year")+
   theme(plot.title = element_text(hjust = 0.5,size = 22,color ="steel blue"))
 
 
@@ -175,7 +177,7 @@ What are some issues with the data?
 
     -   This was a season shortened due to Covid-19
 
-4.  Team Data needs to be appended to Batter Data by Team Name 
+4.  Team Data needs to be appended to pitcher Data by Team Name 
 
 ***  
 
@@ -185,20 +187,20 @@ There are several ways to do this, we will identify the variables we want to cha
 ```{r}
 
 #Select Column names that are characters but not Team or Name, These should be percentages
-Batter_data_chars_to_convert <- Batter_data %>% 
+pitcher_data_chars_to_convert <- pitcher_data %>% 
   select_if(is.character)%>% select(-Team,-Name) %>% 
   mutate_all (function(x) as.numeric(readr::parse_number(x))/100)
 #Note : There are additional ways to do this, this is just one solution
 
 
 #We can exclude the variables we converted and reintroduce them
-Batter_data_num <- Batter_data %>% select(-colnames(Batter_data_chars_to_convert))
+pitcher_data_num <- pitcher_data %>% select(-colnames(pitcher_data_chars_to_convert))
 
-Batter_data2 = cbind(Batter_data_num,Batter_data_chars_to_convert) %>% 
-  select (colnames(Batter_data)) %>%  #preserve original order 
-  dplyr::rename(flyball_perc = `FB%...46`,fastball_perc = `FB%...73`) #rename two ambiguous columns
+pitcher_data2 = cbind(pitcher_data_num,pitcher_data_chars_to_convert) %>% 
+  select (colnames(pitcher_data)) %>%  #preserve original order 
+  dplyr::rename(flyball_perc = `FB%...50`,fastball_perc = `FB%...74`) #rename two ambiguous columns
   
-skim(Batter_data2) %>% 
+skim(pitcher_data2) %>% 
   as_tibble() %>% 
   group_by(skim_type) %>% 
   count()
@@ -243,7 +245,7 @@ I choose 30% coverage of data necessary but this can be adjusted up or down. Thi
 
 # Keep variables with enough values (Need 30% data coverage rate here)
 Player_cols_to_keep =
-skim(Batter_data2) %>% 
+skim(pitcher_data2) %>% 
   dplyr::select(skim_type, skim_variable, complete_rate) %>% 
   filter (complete_rate > 0.30)
 
@@ -254,7 +256,7 @@ Player_cols_to_keep_transpose = t(Player_cols_to_keep)
 Player_cols_to_keep = colnames(janitor::row_to_names(Player_cols_to_keep_transpose,row_number = 2))
 
 #Only keep the columns designated to have over 30% of their data populated or greater
-Batter_data3 = Batter_data2 %>% 
+pitcher_data3 = pitcher_data2 %>% 
   select(one_of(Player_cols_to_keep)) 
 
 
@@ -288,44 +290,54 @@ FDG_Team4 = FDG_Team3 %>%
 ***  
 
 ### Creating Variables Normalized by Year  
-Some Variables will need to be normalized by Plate Appearances (PA) if they aren't a percentage already. Remaining Variables are percentages or indicies so will not need to be transformed
+Some Variables will need to be normalized by Innings_Pitched (IP) if they aren't a percentage already. Remaining Variables are percentages or indices so will not need to be transformed
 
 ```{r}
 
-Batter_data4 = Batter_data3 %>% 
-  mutate( #create new variables based on existing variables
-    H_PA = H/PA,
-    x1B_PA = `1B`/PA, #note: R can't have variables start with a number
-    x2b_PA = `2B`/PA,
-    x3b_PA = `3B`/PA,
-    HR_PA = HR/PA,
-    R_PA = R/PA,
-    RBI_PA = RBI/PA,
-    BB_PA = BB/PA,
-    IBB_PA = IBB/PA,
-    SO_PA=SO/PA,
-    HBP_PA=HBP/PA,
-    SF_PA=SF/PA,
-    SH_PA=SH/PA,
-    GDP_PA= GDP/PA,#ground into double play
-    SB_PA=SB/PA,
-    CS_PA=CS/PA,
-    GB_PA = GB/PA,   #Groundballs
-    FB_PA =  FB/PA,  #FlyBalls
-    LD_PA = LD/PA,   #LineDrives
-    IFFB_PA = IFFB/PA,  #Infield Fly balls
-    Pitches_PA= Pitches/PA,
-    Balls_PA= Balls/PA,
-    Strikes_PA= Strikes/PA,
-    IFH_PA= IFH/PA,
-    BU_PA= BU/PA,
-    BUH_PA= BUH/PA,
-    PH_PA= PH/PA,
-    Barrels_PA= Barrels/PA,
-    HardHits_PA= HardHit/PA
-  ) %>% select(-(H:CS),-(GB:BUH),-PH,-Barrels,-HardHit,-Events) #Drop the old variables
 
-#skim(Batter_data4) %>% as_tibble()
+pitcher_data4 = pitcher_data3 %>% 
+  mutate( #create new variables based on existing variables
+    W_IP = W/IP,
+    L_IP =  L/IP, 
+    ShO_IP = ShO/IP,
+    SV_IP = SV/IP,
+    BS_IP = BS/IP,
+    TBF_IP = TBF/IP,
+    H_IP = H/IP,
+    R_IP = R/IP,
+    ER_IP = ER/IP,
+    HR_IP=HR/IP,
+    BB_IP=BB/IP,
+    IBB_IP=IBB/IP,
+    HBP_IP=HBP/IP,
+    WP_IP= WP/IP,
+    BK_IP=BK/IP,
+    SO_IP=SO/IP,
+    GB_IP = GB/IP,   #Groundballs
+    FB_IP =  FB/IP,  #FlyBalls
+    LD_IP = LD/IP,   #LineDrives
+    IFFB_IP = IFFB/IP,  #Infield Fly balls
+    Balls_IP= Balls/IP,
+    Strikes_IP= Strikes/IP,
+    Pitches_IP= Pitches/IP,
+    RS_IP= RS/IP,
+    IFH_IP= IFH/IP,
+    BU_IP= BU/IP,
+    BUH_IP= BUH/IP,
+    Pulls_IP= Pulls/IP,
+    HLD_IP= HLD/IP,   
+    SD_IP= SD/IP,    
+    MD_IP= MD/IP,    
+    Barrels_IP= Barrels/IP,
+    HardHits_IP= HardHit/IP
+  ) %>% select(-L,-G,-IP,-ShO,-BS,-(TBF:BK),-(GB:BUH),-Pulls,-(SD:MD),-Barrels,-HardHit,-Events)
+               
+               #will be removed after lags -FIP,-(RAR:WPA),,-(wFB:wCH),-(`ERA-`:`xFIP-`),-SIERA,-(`RA9-WAR`:`Age Rng`),-kwERA,-`wCH (pi)`:`wSL (pi)`,`K/9+`:`HR/FB%+`) #Drop the old variables
+#Be careful about RS - Run Support and RS/9
+
+#skim(pitcher_data4) %>% as_tibble()
+
+
 
 
 ```
@@ -384,20 +396,20 @@ There are several ways to lag a dataset **BY GROUP**.
 
 
 #Order the dataset by lag columns
-Batter_data5 =  arrange(Batter_data4, playerid,Season) #playerid is the Fangraph id assigned to each player
+pitcher_data5 =  arrange(pitcher_data4, playerid,Season) #playerid is the Fangraph id assigned to each player
 
 # Convert dataframe to data.table format
-DT_batter = data.table(Batter_data5)
+DT_pitcher = data.table(pitcher_data5)
 
 #designate columns to lag - which is all of them
-cols1 = colnames(Batter_data5)
+cols1 = colnames(pitcher_data5)
 anscols = paste("lag", cols1, sep="_")
-DT_batter[, (anscols) := data.table::shift(.SD, 1, NA, "lag"),by ='playerid', .SDcols=cols1] #Create 1 period lags by year
+DT_pitcher[, (anscols) := data.table::shift(.SD, 1, NA, "lag"),by ='playerid', .SDcols=cols1] #Create 1 period lags by year
 
-Batter_data6 = as.data.frame(DT_batter) %>% select(-lag_playerid, -lag_Team, -lag_Season, -lag_Age,-lag_Name)
+pitcher_data6 = as.data.frame(DT_pitcher) %>% select(-lag_playerid, -lag_Team, -lag_Season, -lag_Age,-lag_Name)
 
-ncol(Batter_data5) #287 - no lags
-ncol(Batter_data6) #574 - lagged data ~ (287 * 2)-5
+ncol(pitcher_data5) #250 - no lags
+ncol(pitcher_data6) #495 - lagged data ~ (250 * 2)-5
 
 ```
 
@@ -408,18 +420,18 @@ We can use either the `merge` function or the SQL functionality provided by the 
 
 ```{r}
 
-df_batting_init = sqldf(
+df_pitching_init = sqldf(
   "
   select a.*, b.*
-  from Batter_data6 a
+  from pitcher_data6 a
   left join FDG_Team5 b
   on a.Team = b.T_Team and a.Season = b.T_Season
   
   "
-)  %>% select(-T_Team,-T_Season,T_Age,T_G,T_AB)# Unncessary Team Variables
+)  %>% select(-T_Team,-T_Season,-T_Age,-T_G,-T_AB)# Unncessary Team Variables
 
 
-nrow(df_batting_init) - nrow(Batter_data6) #check if any rows are duplicated
+nrow(df_pitching_init) - nrow(pitcher_data6) #check if any rows are duplicated
 
 
 ```
@@ -436,66 +448,110 @@ We can use Percentile based ranking to get rankings for players from the 2021 se
 ### Calculating past performance   
 
 Each player goes from a 0% to 100% on each percentile stat that is used for creating a scoring opportunity. All data is already normalized by plate appearances, but must now be ranked for each year.   
-
+*Note this is 6x6 Scoring, for 5x5 scoring head* [here.]()  
 
 ```{r}
 
 #Categories I include are:
-#Runs (R), Home Runs (HR), Runs Batted In (RBI), Stolen Bases (SB), Batting Average (AVG)
-df_batting_init2 =  df_batting_init %>%
+#Wins, Saves, WHIP, ERA, SOs, Holds
+
+df_pitching_init2 =  df_pitching_init %>%
 #  arrange(player_id,year) %>% 
   group_by(Season) %>% 
   mutate(
-    Runs_share = order(order(rank(R_PA,ties.method = 'average'),decreasing = FALSE))/n(),
-     HR_share = order(order(rank(HR_PA,ties.method = 'average'),decreasing = FALSE))/n(),
-     RBI_share = order(order(rank(RBI_PA,ties.method = 'average'),decreasing = FALSE))/n(),
-     SB_share = order(order(rank(SB_PA,ties.method = 'average'),decreasing = FALSE))/n(),
-     AVG_share = order(order(rank(AVG,ties.method = 'average'),decreasing = FALSE))/n(),
-    OPS_share = 0,
-    Worth = Runs_share+HR_share+RBI_share+SB_share+AVG_share+OPS_share
+    Wins_share = order(order(rank(W_IP,ties.method = 'average'),decreasing = FALSE))/n(),
+     SO_share = order(order(rank(SO_IP,ties.method = 'average'),decreasing = FALSE))/n(),
+     SV_share = order(order(rank(SV_IP,ties.method = 'average'),decreasing = FALSE))/n(),
+     WHIP_share = order(order(rank(WHIP,ties.method = 'average'),decreasing = FALSE))/n(),
+     ERA_share = order(order(rank(ERA,ties.method = 'average'),decreasing = FALSE))/n(),
+    HLD_share = order(order(rank(HLD_IP,ties.method = 'average'),decreasing = FALSE))/n(),
+    Worth = Wins_share+SO_share+SV_share+WHIP_share+ERA_share+HLD_share
     ) %>% 
-  ungroup() %>% 
-select(-R_PA,-HR_PA,-RBI_PA,-SB_PA,-AVG,-OPS)
-
+  ungroup() 
 ```
 
 Chart of the Distribution of initial percentiles  
 As the chart below shows, the data is roughly normal.
 ```{r}
 
-skewness((df_batting_init2$Worth))
+skewness((df_pitching_init2$Worth))
 
-ggplot2::qplot(df_batting_init2$Worth, main="Total Dataset") + geom_histogram(colour="black", fill="grey") + theme_bw()
+ggplot2::qplot(df_pitching_init2$Worth, main="Total Pitching Worth Dataset") + geom_histogram(colour="black", fill="grey") + theme_bw()
 
-min(df_batting_init2$Worth)
+min(df_pitching_init2$Worth)
 
-max(df_batting_init2$Worth)
+max(df_pitching_init2$Worth)
 
-ggpubr::ggqqplot(df_batting_init2$Worth)
+ggpubr::ggqqplot(df_pitching_init2$Worth)
 
-shapiro.test(df_batting_init2$Worth)
+shapiro.test(df_pitching_init2$Worth)
 ```
 
 
 ***  
 
 
-## 2021 Player Rankings  
-### 2021 Player Rankings - Top Worth Players with OPS
-Total Rankings for the players (Using 5x5 Scoring) can be found [here]()  
+## 2021 Player Rankings - Per IP performance 
+### 2021 Player Rankings - Top Worth Players with Holds  
+Total Rankings for the players (Using 5x5 Scoring) can be found [here.]() While it looks like many of the top players have low worth scores, it is because we haven't applied a modifier for IP yet. Wins are harder to come by relative to any other stat and require more innings pitched.     
+```{r,warning=FALSE}
+
+
+df_pitching_init2_raw =  df_pitching_init %>%
+#  arrange(player_id,year) %>% 
+  group_by(Season) %>% 
+  mutate(
+    Wins_share_raw = order(order(rank(W,ties.method = 'average'),decreasing = FALSE))/n(),
+     SO_share_raw = order(order(rank(SO,ties.method = 'average'),decreasing = FALSE))/n(),
+     SV_share_raw = order(order(rank(SV,ties.method = 'average'),decreasing = FALSE))/n(),
+     WHIP_share = order(order(rank(WHIP,ties.method = 'average'),decreasing = FALSE))/n(),
+     ERA_share = order(order(rank(ERA,ties.method = 'average'),decreasing = FALSE))/n(),
+    HLD_share_raw = order(order(rank(HLD,ties.method = 'average'),decreasing = FALSE))/n(),
+    Worth = Wins_share_raw+SO_share_raw+SV_share_raw+WHIP_share+ERA_share+HLD_share_raw
+    ) %>% 
+  ungroup() %>% 
+select(-W,-SO,-SV,-WHIP,-ERA,-HLD)
+
+
+
+options(digits=2)
+
+df_pitching_init2021_raw =
+df_pitching_init2_raw %>% 
+  group_by(Name) %>% 
+  filter(Season == 2021) %>% 
+  arrange(desc(Worth)) %>% 
+  select(Name,Wins_share_raw,SO_share_raw,SV_share_raw,WHIP_share,ERA_share,HLD_share_raw,Worth)
+
+
+df_pitching_init2021_raw %>%
+  filter (Worth>2.9) %>% 
+  kbl() %>% 
+ kable_material(c("striped", "hover","condensed","responsive"),full_width = F,fixed_thead = T)
+
+```
+
+
+***  
+
+
+
+## 2021 Player Rankings - Actual Performance    
+### 2021 Player Rankings - Top Worth Players with Holds  
+Total Rankings for the players (Using 5x5 Scoring) can be found [here.]() While it looks like many of the top players have low worth scores, it is because we haven't applied a modifier for IP yet.  
 ```{r,warning=FALSE}
 
 options(digits=2)
 
-df_batting_init2021 =
-df_batting_init2 %>% 
+df_pitching_init2021 =
+df_pitching_init2 %>% 
   group_by(Name) %>% 
   filter(Season == 2021) %>% 
   arrange(desc(Worth)) %>% 
-  select(Name,Runs_share,HR_share,RBI_share, SB_share,OPS_share,AVG_share,Worth)
+  select(Name,Wins_share,SO_share,SV_share,WHIP_share,ERA_share,HLD_share,Worth)
 
 
-df_batting_init2021 %>%
+df_pitching_init2021 %>%
   filter (Worth>3.9) %>% 
   kbl() %>% 
  kable_material(c("striped", "hover","condensed","responsive"),full_width = F,fixed_thead = T)
@@ -506,13 +562,18 @@ df_batting_init2021 %>%
 ***  
 
 
+
 # Creating Model File   
 ## Additional Data Prep  
 ### Remove Variables which are based off current hitting numbers    
 Not all variables can be used for predictive modeling.   
 ```{r}
-df_batting_init3 = df_batting_init2 %>% 
-  select(-`HR/FB`, -Dol,-`Age Rng`,PA,-(H_PA:PH_PA),-Name)
+df_pitching_init3 = df_pitching_init2
+#Be careful about RS - Run Support and RS/9
+
+  
+
+
 ```
 
 Lag Share Variables to use for predictive modeling. The variables that we created for the Worth metric must also be removed. This will create the final dataset.
@@ -520,18 +581,20 @@ Lag Share Variables to use for predictive modeling. The variables that we create
 ```{r}
 
 #Order the dataset by lag columns
-df_batting_init4 =  arrange(df_batting_init3, playerid,Season) #playerid is the Fangraph id assigned to each player
+df_pitching_init4 =  arrange(df_pitching_init3, playerid,Season) #playerid is the Fangraph id assigned to each player
 
 # Convert dataframe to data.table format
-DT_batter2 = data.table(df_batting_init4)
+DT_pitcher2 = data.table(df_pitching_init4)
 
-#designate columns to lag - which is all of them
-cols1 = (c('Runs_share','HR_share','RBI_share', 'SB_share','OPS_share','AVG_share','Worth'))
-anscols = paste("lag", cols1, sep="_")
-DT_batter2[, (anscols) := data.table::shift(.SD, 1, NA, "lag"),by ='playerid', .SDcols=cols1] #Create 1 period lags by year
+#designate columns to lag - just the new shares
+cols1 = (c('Wins_share','SO_share','SV_share', 'ERA_share','WHIP_share','HLD_share','Worth'))
+anscols = paste("lag", cols1, sep="_") 
+DT_pitcher2[, (anscols) := data.table::shift(.SD, 1, NA, "lag"),by ='playerid', .SDcols=cols1] #Create 1 period lags by year
 
-df_batting_final = as.data.frame(DT_batter2) %>% 
-  select(-c(Runs_share,HR_share,RBI_share, SB_share,OPS_share,AVG_share))
+df_pitching_final = as.data.frame(DT_pitcher2) %>% 
+  select(-c(Wins_share,SO_share,SV_share, ERA_share,WHIP_share,HLD_share,Name))%>% 
+select(-FIP,-(RAR:WPA),-(wFB:wCH),-(`ERA-`:`xFIP-`),
+       -SIERA,-(`RA9-WAR`:`Age Rng`),-kwERA,-(`wCH (pi)`:`wSL (pi)`),-(`K/9+`:`HR/FB%+`)) %>% select(-W,-SO,-SV,-HLD,-W_IP,-SO_IP,-SV_IP,-WHIP,-ERA,-HLD_IP)
 
 ```
 
@@ -543,13 +606,13 @@ We split the data into Training Data (which is used to create the model) and tes
 
 set.seed(15674)  # For reproducibility
 # Create index for testing and training data
-inTrain <- createDataPartition(y = df_batting_final$Worth, p = 0.80, list = FALSE)
+inTrain <- createDataPartition(y = df_pitching_final$Worth, p = 0.80, list = FALSE)
 # subset pitching data for training
-tr_2021 <- df_batting_final[inTrain,]
+tr_2021 <- df_pitching_final[inTrain,]
 # subset the rest to test and validate trained model
-te_2021 <- df_batting_final[-inTrain,]
+te_2021 <- df_pitching_final[-inTrain,]
 
-nrow(tr_2021)/nrow(df_batting_final) #check if split is 0.8
+nrow(tr_2021)/nrow(df_pitching_final) #check if split is 0.8
 
 ```
 
@@ -574,7 +637,7 @@ head(score_frame)
 
 tr_treated_2021 <- vtreat::prepare(treat_plan_2021, tr_2021)
 te_treated_2021 <- vtreat::prepare(treat_plan_2021, te_2021)
-
+total_treated_2021_pitching <- vtreat::prepare(treat_plan_2021, df_pitching_final)
 
 #tr_treated = tr
 #te_treated = te
@@ -597,6 +660,10 @@ skewness(tr_treated_2021$Worth) #The skewness is the same as the overall
 
 
 ```
+
+
+***    
+
 
 
 # Running XGboost Model {.tabset} 
@@ -655,6 +722,10 @@ caret::varImp(xgb_base_2021, scale = F  )
 
 ```
 
+
+***    
+
+
 ## Further Variable Selection  
 ### Remove redundant and highly correlated variables  
 
@@ -672,7 +743,7 @@ as.data.frame(t(as.data.frame(dep_cor1)%>%
   select(!contains("_isBAD")))) 
 
 dep_cor1 <- tibble::rownames_to_column(dep_cor1,"VARIABLES")%>% #remove indicators for missing data
-  filter(V1 > 0.70|V1 < -0.5)
+  filter(V1 > 0.40|V1 < -0.3)
 
 dep_cor1
 
@@ -686,8 +757,8 @@ Let's Remove variables with high correlation to worth metric, and metrics that a
 ```{r}
 
 input_x <- as.matrix(((tr_treated_2021))%>%
-   select(-Worth) %>% #Remove dependant variables
-     select (-all_of(dep_cor2),-RAR,-WAR,-WPA,-Spd,-Rep,-BABIP,-Def,-BABIP_plus_,-PA,-AB,-G,-wFB,	-wSL,	-wCT,	-wCH,	-wSF, -X_plus_WPA, -wSB, -BsR,-Pos,-UBR , -wCB #Remove redundant variables or non/weighted variables
+   select(-Worth) %>% #Remove some variables variables
+     select (-RS_IP,-ER_IP,-R_IP,-REW,-RE24,-Clutch,-WPA_slash_LI,-Season #Remove redundant variables or non/weighted variables
 ) %>%      
 select(!ends_with ("_isBAD"))) #indicator variable for missing data
 
@@ -718,6 +789,10 @@ caret::varImp(xgb_base_2021, scale = F  )
 ```
 
 
+***    
+
+
+
 ## Model with new data  
 
 ### Tuning All Hyperparameters
@@ -733,8 +808,8 @@ nrounds <- 1000
 # big with lower starting points that they'll mess the scales
 tune_grid <- expand.grid(
   nrounds = seq(from = 100, to = nrounds, by = 50),
-  eta = c(0.01, 0.025, 0.05, 0.1),
-  max_depth = c(2, 4, 6, 8),
+  eta = c(0.01, 0.025, 0.05, 0.075, 0.1),
+  max_depth = c(2, 4, 6, 8, 10),
   gamma = 0,
   colsample_bytree = 1,
   min_child_weight = 1,
@@ -790,6 +865,10 @@ tuneplot <- function(x, probs = .90) {
 tuneplot(xgb_tune_2021)
 ```
 
+
+***    
+
+
 ### Fine Tuning Model  
 #### Second Tuning: Maximum Depth and Minimum Child Weight  
 After fixing the learning rate to 0.1 and we’ll also set maximum depth to 3 +-1 (or +2 if max_depth == 2) to experiment a bit around the suggested best tune in previous step. Then, well fix maximum depth and minimum child weigh
@@ -823,6 +902,10 @@ xgb_tune2_2021$bestTune
 varImp(xgb_tune2_2021, scale = F  ) 
 ```
 
+
+***    
+
+
 #### Third Tuning: Column and Row Sampling
 
 ```{r}
@@ -854,6 +937,10 @@ varImp(xgb_tune3_2021, scale = F  )
 
 ```
 
+
+***    
+
+
 #### Fourth Tuning: Gamma  
 Next, we again pick the best values from previous step, and now will see whether changing the gamma has any effect on the model fit:
 ```{r}
@@ -882,6 +969,10 @@ xgb_tune4_2021$bestTune
 
 varImp(xgb_tune4_2021, scale = F  ) 
 ```
+
+
+***    
+
 
 #### Fifth Tuning: Reducing the Learning Rate  
 Now, we have tuned the hyperparameters and can start reducing the learning rate to get to the final model:  
@@ -922,6 +1013,10 @@ varImp(xgb_tune5_2021, scale = F  )
 ```
 
 
+***    
+
+
+
 #### Fitting Final Model
 
 ```{r}
@@ -949,10 +1044,15 @@ varImp(xgb_model_2021, scale = F  )
 
 ```
 
-### Model Performance  
+
+***    
 
 
-#### Checking Model on Test Split Data  
+## Model Performance  
+
+
+### Checking Model on Test Split Data  
+We don't need to look too closely at are training data as Xgboost will heavily overfit the model based on that data. The more important part is how the model performs on in predicting our Test Sample that was not included.  
 
 ```{r}
 
@@ -1007,6 +1107,10 @@ ggplot2::ggplot() +
 ```
 
 
+***    
+
+
+
 # Creating 2022 Projections from Model  {.tabset} 
 
 
@@ -1044,6 +1148,10 @@ input_y_2022 = tr_treated_2022$Worth
 
 ```
 
+
+***    
+
+
 2. Re-fit model with reduced variable scope  
 
 ```{r}
@@ -1077,29 +1185,136 @@ unscalevi24$Importance_perc = with(unscalevi24,Importance/sum(Importance))
 
 unscalevi24
 
-
-#For anything above breaking_IP we need to create projection table by age or age bucket
-
-#write_csv(unscalevi24,"unscalevi24.csv")
+save(xgb_model_2022,file = '2022_Pitching6x6_Model.Rdata')
 
 ```
 
 
-## Get 2022 list of players
+***    
 
+
+
+## Get 2022 list of players  
+### Arrange the Data so the Columns are in the exact order as the model   
+First let's prepare a file for predicting based on our model object
 
 ```{r}
 
-Latest_2022_playerdata_FP = read_csv("FantasyPros_Fantasy_Baseball_Rankings_ALL.csv")
 
-head(Latest_2022_playerdata_FP)
+
+
+variableslag= row_to_names(as.data.frame(t(variables_to_keep_2022)),row_number = 1)  %>% select (starts_with("lag"))
+
+variables_nolag = owmr::remove_prefix(variableslag,"lag" , sep = "_")
+
+Data_Predict_2022a = df_pitching_init2 %>% select (one_of(colnames(variables_nolag)),Season,playerid)
+colnames(Data_Predict_2022a) <- paste0("lag_", colnames(Data_Predict_2022a))
+
+Data_Predict_2022b = df_pitching_init2 %>% select (one_of(colnames(variables_nolag)))
+colnames(Data_Predict_2022b) = colnames(variableslag)
+
+variables_to_keep_2022_nolag = total_treated_2021_pitching %>% select(one_of(variables_to_keep_2022),Season,playerid,starts_with("Team_lev_x_"))%>% select(-one_of(colnames(Data_Predict_2022b)))
+
+
+Data_predict_2022 = sqldf(
+  "
+  select a.*,b.* from
+  Data_Predict_2022a a,
+  variables_to_keep_2022_nolag b
+  on b.playerid = a.lag_playerid
+  and b.Season = a.lag_Season
+  "
+) %>% select(-lag_playerid,lag_Season) %>%
+  filter(Season == 2021) %>% 
+  select(one_of(variables_to_keep_2022),starts_with("Team_lev_x_"))
+
 
 
 ```
 
 
+***    
 
 
+## Create Predictions for Model
+### Run Projections on Players who Played in 2021
+This is the raw prediction score per IP for each pitcher  
+```{r}
+
+pitching_predictions = as.data.frame(predict(xgb_model_2022,Data_predict_2022))
+
+names(pitching_predictions) = c("Predict_Score")
+
+Data_predict_2022_w_Pitching_Predictions = cbind(Data_predict_2022,pitching_predictions) %>% select(playerid,Predict_Score)
+
+head(Data_predict_2022_w_Pitching_Predictions)
+
+```
+
+
+***    
+
+### Load in Latest 2022 Projections for Innings Pitched  
+Downloaded from FanGraphs [here.](https://www.fangraphs.com/projections.aspx?pos=all&stats=pit&type=atc&team=0&lg=all&players=0)  
+
+```{r}
+Latest_2022_pitchingdata_FP = read_csv("FanGraph_Fantasy_Baseball_Pitching.csv")
+
+Latest_2022_pitchingdata_FP
+
+```
+
+
+***    
+
+
+```{r, warning = False}
+
+
+Pitching_Data_NonAdj_Projections = sqldf(
+  "
+  select a.*,b.Predict_Score
+  from Latest_2022_pitchingdata_FP a 
+  left join 
+  Data_predict_2022_w_Pitching_Predictions b
+  on a.playerid = b.playerid
+  "
+) %>% filter(ADP<370 | is.na(Predict_Score)==F)
+
+
+Pitching_Data_Adj_Projections =
+Pitching_Data_NonAdj_Projections %>% 
+  mutate(
+    Avg_IP = 60,
+    AdjPredict_Score_raw = ifelse(is.na(Predict_Score),NA,Predict_Score*(IP/Avg_IP)),
+    max_predscore= max(AdjPredict_Score_raw,na.rm = T),
+    AdjPredict_Score = ifelse (is.na(AdjPredict_Score_raw),NA,AdjPredict_Score_raw *100/max_predscore)
+  ) %>% select (Name,ADP,WAR,AdjPredict_Score)
+  
+
+ggplot2::qplot(Pitching_Data_Adj_Projections$AdjPredict_Score, main="Predictions") + geom_histogram(colour="black", fill="grey") + theme_bw()
+
+
+```
+
+
+***    
+
+# 2022 Projections Full  
+## Table of Pitching Projections (Players who Didn't Play in 2021 - Recieve an NA)  
+AdjPredict_Score are normalized to 100
+```{r}
+
+tableexport =
+Pitching_Data_Adj_Projections %>%
+  arrange (ADP,WAR) %>% 
+  kbl() %>% 
+ kable_material(c("striped", "hover","condensed","responsive"),full_width = F,fixed_thead = T)
+
+save_kable(tableexport,file = "Pitching6x6.html")
+
+tableexport
+```
 
 
 
