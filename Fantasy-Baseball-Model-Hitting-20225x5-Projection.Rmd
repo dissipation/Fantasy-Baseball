@@ -1,0 +1,1109 @@
+---
+title: "Welcome to my 2022 Projections for Hitters 5x5"
+author: "Darshan Patel"
+date: "`r Sys.Date()`"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: sandstone
+    highlight: tango
+    fig_caption: true
+    df_print: paged
+---
+
+<html>
+
+<p>
+
+Latest Projections using XGboost
+
+</p>
+
+<p>
+
+Estimated with R Studio
+
+</p>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 'C:\Users\Admin\Documents\Learning Python Folder1\Python Essence Training\Fantasy-Baseball')
+options(knitr.table.format = "html") 
+options(digits=2)
+```
+
+# Project Scope
+
+This project is designed to showcase how Using a Rank Based Worth System values Fantasy Baseball Players
+
+INSERT TABLE of Projections, etc, to summarize project  
+
+***  
+
+# Processing the Data {.tabset}
+
+## Getting Data Into R
+
+### Load Libraries
+
+<p style="color:black;">
+
+*First we need to load the packages that R needs to run the analysis*
+
+</p>
+
+```{r load library,message = FALSE,warning=FALSE}
+library(sqldf) #SQL in R
+library(skimr) #Summaries and useful for removing low % data
+library(ggplot2) #Plotting Functions
+library(plyr) #slightly deprecated data cleaning
+library(dplyr) #slightly updated data cleaning
+library(tidyverse) #tidyverse data cleaning universe
+library(caret) #wrapper for creating, tuning and validating models
+library(xgboost) #package for creating regression tree model
+library(vtreat) # useful package for treating data before modeling 
+library(Matrix)
+library(Boruta)
+library(mgcv)
+library(moments) #for measuring skewness
+library(data.table) #alternative to dplyr we use to create lags
+library(pdp) #partial dependence graphs
+library(vip) #variable importance 
+library(grid) #put multiple plots on one grid
+library(gridExtra) #additional grid functionality
+library(janitor) #one function used to clean transposed data set
+library(ggpubr) #for qq plot
+library(tableHTML)
+library(kableExtra)
+```
+
+The \# comments generally explain what additional functionality each library adds to R
+
+### Load in Data
+
+All data is downloaded from Fan Graphs. From this [location](https://www.fangraphs.com/leaders.aspx?pos=all&stats=bat&lg=all&qual=y&type=8&season=2021&month=0&season1=2021&ind=0). The data is also available on my Github [here](https://github.com/dissipation/Fantasy-Baseball). There are player level and team data sets
+
+```{r data read-in, results= 'hide',message=FALSE}
+
+#data read-in
+Batter_data <- read_csv("FanGraphs Leaderboard_Hitting50PA.csv")
+
+#Team datasets
+FDG_Team = read_csv("FanGraphs Leaderboard_Team.csv")
+
+
+#Create a prefix for all team stats that starts with T_
+FDG_Team2 <- FDG_Team %>% 
+  rename_with( ~ paste0("T_", .x))
+
+```
+
+### Checking Team Data
+
+`str` give information about an object, while `skim` provides a customizable summary  
+
+```{r checking team data}
+
+#Output not shown for space
+#str(FDG_Team2)
+
+skim(FDG_Team2) %>%  
+  tibble::as_tibble()
+
+
+```
+***  
+
+## Understanding the Dataset
+
+### Exploring the dataset
+
+`skim` let's us see how the data was imported into R. Documentation can be found [here](https://cran.r-project.org/web/packages/skimr/vignettes/skimr.html)
+
+```{r}
+
+#Full Dataset dimensions
+
+skimr::skim(Batter_data) %>% 
+  tibble::as_tibble() %>% 
+  select(skim_type,skim_variable,complete_rate) %>% 
+  filter(complete_rate >0.30) #288 Variables
+
+#skim_type - character or numeric
+#skim_variable - name of variable
+#complete_rate - % of data that is not missing
+#filter - only keep variables that have 30% of data populated
+```
+
+Additionally let's look at how variables vary by year to see if there are any discrepancies there  
+
+```{r}
+
+#It looks like one year, there were fewer games played, and there is a clear drop off in home runs
+Batter_data_dist =
+Batter_data %>% 
+ group_by(Season) %>% 
+  summarize (Games_played = max(G),
+             Avg_HR= mean(HR)
+             )
+Batter_data_dist
+
+ggplot(Batter_data_dist, aes(Season, Avg_HR)) +
+  geom_col()+
+  ggtitle("Average Home Runs by Year")+
+  theme(plot.title = element_text(hjust = 0.5,size = 22,color ="steel blue"))
+
+
+
+```
+
+***  
+
+## Cleaning and Creating Initial Dataset for Model
+
+What are some issues with the data?
+
+1.  Many of Variables, such as K%, are being read in as characters
+
+    -   Only Team and Player Name should be characters
+
+2.  There is spotty data coverage in some of the variables (\~Variables have less than 30% Coverage)
+
+3.  2020 Data only includes 60 games worth of data
+
+    -   This was a season shortened due to Covid-19
+
+4.  Team Data needs to be appended to Batter Data by Team Name 
+
+***  
+
+### **Cleanly Changing all Variables that are characters to numeric.**
+There are several ways to do this, we will identify the variables we want to change that are mis-identified. `parse_number` can be used to pull numbers from these variables. Additional ways to tackle this can be found [here](https://stackoverflow.com/questions/8329059/how-to-convert-character-of-percentage-into-numeric-in-r)
+
+```{r}
+
+#Select Column names that are characters but not Team or Name, These should be percentages
+Batter_data_chars_to_convert <- Batter_data %>% 
+  select_if(is.character)%>% select(-Team,-Name) %>% 
+  mutate_all (function(x) as.numeric(readr::parse_number(x))/100)
+#Note : There are additional ways to do this, this is just one solution
+
+
+#We can exclude the variables we converted and reintroduce them
+Batter_data_num <- Batter_data %>% select(-colnames(Batter_data_chars_to_convert))
+
+Batter_data2 = cbind(Batter_data_num,Batter_data_chars_to_convert) %>% 
+  select (colnames(Batter_data)) %>%  #preserve original order 
+  dplyr::rename(flyball_perc = `FB%...46`,fastball_perc = `FB%...73`) #rename two ambiguous columns
+  
+skim(Batter_data2) %>% 
+  as_tibble() %>% 
+  group_by(skim_type) %>% 
+  count()
+
+
+#Logical variables are R's best guess, in our case they are all NA's and will be removed
+
+```
+
+The same can be done for the Team Data that is loaded  
+
+
+```{r}
+
+#Select Column names that are characters but not Team or Name, These should be percentages
+FDG_Team2_chars_to_convert <- FDG_Team2 %>% 
+  select_if(is.character)%>% select(-T_Team) %>% 
+  mutate_all (function(x) as.numeric(readr::parse_number(x))/100)
+#Keep in mind, parse number may make actual characters into numerical variables so carefully check your data before using
+
+#We can exclude the variables we converted and reintroduce them
+FDG_Team2_num <- FDG_Team2 %>% select(-colnames(FDG_Team2_chars_to_convert))
+
+FDG_Team3 = cbind(FDG_Team2_num,FDG_Team2_chars_to_convert) %>% 
+  select (colnames(FDG_Team2)) %>%  #preserve original order
+dplyr::rename(T_flyball_perc = `T_FB%...45`,T_fastball_perc = `T_FB%...72`) 
+
+skim(FDG_Team3) %>% 
+  as_tibble() %>% 
+  group_by(skim_type) %>% 
+  count()
+
+
+
+```
+***  
+
+
+### Filtering Data with Low Coverage    
+I choose 30% coverage of data necessary but this can be adjusted up or down. This will also get rid of columns that are all `NA`.  
+```{r}
+
+# Keep variables with enough values (Need 30% data coverage rate here)
+Player_cols_to_keep =
+skim(Batter_data2) %>% 
+  dplyr::select(skim_type, skim_variable, complete_rate) %>% 
+  filter (complete_rate > 0.30)
+
+#Transpose Rows to get column names as skim melts the data
+Player_cols_to_keep_transpose = t(Player_cols_to_keep) 
+
+#extract the colnames we would like to keep
+Player_cols_to_keep = colnames(janitor::row_to_names(Player_cols_to_keep_transpose,row_number = 2))
+
+#Only keep the columns designated to have over 30% of their data populated or greater
+Batter_data3 = Batter_data2 %>% 
+  select(one_of(Player_cols_to_keep)) 
+
+
+```
+
+
+*Repeat the process for Team Variables*
+```{r}
+Team_cols_to_keep =
+skim(FDG_Team3) %>% 
+  dplyr::select(skim_type, skim_variable, complete_rate) %>% 
+  filter (complete_rate > 0.30)
+
+
+#Transpose Rows to get column names as skim melts the data
+Team_cols_to_keep_transpose = t(Team_cols_to_keep) 
+
+#extract the colnames we would like to keep
+Team_cols_to_keep = colnames(janitor::row_to_names(Team_cols_to_keep_transpose,row_number = 2))
+
+#Only keep the columns designated to have over 30% of their data populated or greater
+FDG_Team4 = FDG_Team3 %>% 
+  select(one_of(Team_cols_to_keep)) 
+
+
+
+```
+
+
+
+***  
+
+### Creating Variables Normalized by Year  
+Some Variables will need to be normalized by Plate Appearances (PA) if they aren't a percentage already. Remaining Variables are percentages or indicies so will not need to be transformed
+
+```{r}
+
+Batter_data4 = Batter_data3 %>% 
+  mutate( #create new variables based on existing variables
+    H_PA = H/PA,
+    x1B_PA = `1B`/PA, #note: R can't have variables start with a number
+    x2b_PA = `2B`/PA,
+    x3b_PA = `3B`/PA,
+    HR_PA = HR/PA,
+    R_PA = R/PA,
+    RBI_PA = RBI/PA,
+    BB_PA = BB/PA,
+    IBB_PA = IBB/PA,
+    SO_PA=SO/PA,
+    HBP_PA=HBP/PA,
+    SF_PA=SF/PA,
+    SH_PA=SH/PA,
+    GDP_PA= GDP/PA,#ground into double play
+    SB_PA=SB/PA,
+    CS_PA=CS/PA,
+    GB_PA = GB/PA,   #Groundballs
+    FB_PA =  FB/PA,  #FlyBalls
+    LD_PA = LD/PA,   #LineDrives
+    IFFB_PA = IFFB/PA,  #Infield Fly balls
+    Pitches_PA= Pitches/PA,
+    Balls_PA= Balls/PA,
+    Strikes_PA= Strikes/PA,
+    IFH_PA= IFH/PA,
+    BU_PA= BU/PA,
+    BUH_PA= BUH/PA,
+    PH_PA= PH/PA,
+    Barrels_PA= Barrels/PA,
+    HardHits_PA= HardHit/PA
+  ) %>% select(-(H:CS),-(GB:BUH),-PH,-Barrels,-HardHit,-Events) #Drop the old variables
+
+#skim(Batter_data4) %>% as_tibble()
+
+
+```
+
+*Repeat the process for Team Variables*
+```{r}
+
+FDG_Team5 = FDG_Team4 %>% 
+  mutate( #create new variables based on existing variables
+    T_H_T_PA = T_H/T_PA,
+    T_x1B_T_PA = T_1B/T_PA, #note: R can't have variables start with a number
+    T_x2b_T_PA = T_2B/T_PA,
+    T_x3b_T_PA = T_3B/T_PA,
+    T_HR_T_PA = T_HR/T_PA,
+    T_R_T_PA = T_R/T_PA,
+    T_RBI_T_PA = T_RBI/T_PA,
+    T_BB_T_PA = T_BB/T_PA,
+    T_IBB_T_PA = T_IBB/T_PA,
+    T_SO_T_PA=T_SO/T_PA,
+    T_HBP_T_PA=T_HBP/T_PA,
+    T_SF_T_PA=T_SF/T_PA,
+    T_SH_T_PA=T_SH/T_PA,
+    T_GDP_T_PA= T_GDP/T_PA,#ground into double play
+    T_SB_T_PA=T_SB/T_PA,
+    T_CS_T_PA=T_CS/T_PA,
+    T_GB_T_PA = T_GB/T_PA,   #Groundballs
+    T_FB_T_PA =  T_FB/T_PA,  #FlyBalls
+    T_LD_T_PA = T_LD/T_PA,   #LineDrives
+    T_IFFB_T_PA = T_IFFB/T_PA,  #Infield Fly balls
+    T_Pitches_T_PA= T_Pitches/T_PA,
+    T_Balls_T_PA= T_Balls/T_PA,
+    T_Strikes_T_PA= T_Strikes/T_PA,
+    T_IFH_T_PA= T_IFH/T_PA,
+    T_BU_T_PA= T_BU/T_PA,
+    T_BUH_T_PA= T_BUH/T_PA,
+    T_PH_T_PA= T_PH/T_PA,
+    T_Barrels_T_PA= T_Barrels/T_PA,
+    T_HardHits_T_PA= T_HardHit/T_PA
+  ) %>% select(-(T_H:T_CS),-(T_GB:T_BUH),-T_PH,-T_Barrels,-T_HardHit,-T_Events) #Drop the old variables
+
+
+#skim(FDG_Team5) %>% as_tibble()
+
+
+```
+
+***  
+
+### Creating Lagged Variables  
+There are several ways to lag a dataset **BY GROUP**.    
+* `Dplyr` way is [here.](https://statisticsglobe.com/create-lagged-variable-by-group-in-r).   
+* While data.table (the method used below) is [here.](https://stackoverflow.com/questions/26291988/how-to-create-a-lag-variable-within-each-group)  
+
+```{r}
+#Note we will only be lagging the player level data, as the previous year's team performance shouldn't impact current performance
+
+
+#Order the dataset by lag columns
+Batter_data5 =  arrange(Batter_data4, playerid,Season) #playerid is the Fangraph id assigned to each player
+
+# Convert dataframe to data.table format
+DT_batter = data.table(Batter_data5)
+
+#designate columns to lag - which is all of them
+cols1 = colnames(Batter_data5)
+anscols = paste("lag", cols1, sep="_")
+DT_batter[, (anscols) := data.table::shift(.SD, 1, NA, "lag"),by ='playerid', .SDcols=cols1] #Create 1 period lags by year
+
+Batter_data6 = as.data.frame(DT_batter) %>% select(-lag_playerid, -lag_Team, -lag_Season, -lag_Age,-lag_Name)
+
+ncol(Batter_data5) #287 - no lags
+ncol(Batter_data6) #574 - lagged data ~ (287 * 2)-5
+
+```
+
+***    
+
+### Merging Team and Player Data  
+We can use either the `merge` function or the SQL functionality provided by the `sqldf` package to join the lagged player level data to the Team level data
+
+```{r}
+
+df_batting_init = sqldf(
+  "
+  select a.*, b.*
+  from Batter_data6 a
+  left join FDG_Team5 b
+  on a.Team = b.T_Team and a.Season = b.T_Season
+  
+  "
+)  %>% select(-T_Team,-T_Season,T_Age,T_G,T_AB)# Unncessary Team Variables
+
+
+nrow(df_batting_init) - nrow(Batter_data6) #check if any rows are duplicated
+
+
+```
+
+
+***  
+
+
+# Creating Rankings for Players Based On Percentiles {.tabset}  
+We can use Percentile based ranking to get rankings for players from the 2021 season.  
+
+## Worth of each stat  
+
+### Calculating past performance   
+
+Each player goes from a 0% to 100% on each percentile stat that is used for creating a scoring opportunity. All data is already normalized by plate appearances, but must now be ranked for each year.   
+
+
+```{r}
+
+#Categories I include are:
+#Runs (R), Home Runs (HR), Runs Batted In (RBI), Stolen Bases (SB), Batting Average (AVG)
+df_batting_init2 =  df_batting_init %>%
+#  arrange(player_id,year) %>% 
+  group_by(Season) %>% 
+  mutate(
+    Runs_share = order(order(rank(R_PA,ties.method = 'average'),decreasing = FALSE))/n(),
+     HR_share = order(order(rank(HR_PA,ties.method = 'average'),decreasing = FALSE))/n(),
+     RBI_share = order(order(rank(RBI_PA,ties.method = 'average'),decreasing = FALSE))/n(),
+     SB_share = order(order(rank(SB_PA,ties.method = 'average'),decreasing = FALSE))/n(),
+     AVG_share = order(order(rank(AVG,ties.method = 'average'),decreasing = FALSE))/n(),
+    OPS_share = 0,
+    Worth = Runs_share+HR_share+RBI_share+SB_share+AVG_share+OPS_share
+    ) %>% 
+  ungroup() %>% 
+select(-R_PA,-HR_PA,-RBI_PA,-SB_PA,-AVG,-OPS)
+
+```
+
+Chart of the Distribution of initial percentiles  
+As the chart below shows, the data is roughly normal.
+```{r}
+
+skewness((df_batting_init2$Worth))
+
+ggplot2::qplot(df_batting_init2$Worth, main="Total Dataset") + geom_histogram(colour="black", fill="grey") + theme_bw()
+
+min(df_batting_init2$Worth)
+
+max(df_batting_init2$Worth)
+
+ggpubr::ggqqplot(df_batting_init2$Worth)
+
+shapiro.test(df_batting_init2$Worth)
+```
+
+
+***  
+
+
+## 2021 Player Rankings  
+### 2021 Player Rankings - Top Worth Players with OPS
+Total Rankings for the players (Using 5x5 Scoring) can be found [here]()  
+```{r,warning=FALSE}
+
+options(digits=2)
+
+df_batting_init2021 =
+df_batting_init2 %>% 
+  group_by(Name) %>% 
+  filter(Season == 2021) %>% 
+  arrange(desc(Worth)) %>% 
+  select(Name,Runs_share,HR_share,RBI_share, SB_share,OPS_share,AVG_share,Worth)
+
+
+df_batting_init2021 %>%
+  filter (Worth>3.9) %>% 
+  kbl() %>% 
+ kable_material(c("striped", "hover","condensed","responsive"),full_width = F,fixed_thead = T)
+
+```
+
+
+***  
+
+
+# Creating Model File   
+## Additional Data Prep  
+### Remove Variables which are based off current hitting numbers    
+Not all variables can be used for predictive modeling.   
+```{r}
+df_batting_init3 = df_batting_init2 %>% 
+  select(-`HR/FB`, -Dol,-`Age Rng`,PA,-(H_PA:PH_PA),-Name)
+```
+
+Lag Share Variables to use for predictive modeling. The variables that we created for the Worth metric must also be removed. This will create the final dataset.
+
+```{r}
+
+#Order the dataset by lag columns
+df_batting_init4 =  arrange(df_batting_init3, playerid,Season) #playerid is the Fangraph id assigned to each player
+
+# Convert dataframe to data.table format
+DT_batter2 = data.table(df_batting_init4)
+
+#designate columns to lag - which is all of them
+cols1 = (c('Runs_share','HR_share','RBI_share', 'SB_share','OPS_share','AVG_share','Worth'))
+anscols = paste("lag", cols1, sep="_")
+DT_batter2[, (anscols) := data.table::shift(.SD, 1, NA, "lag"),by ='playerid', .SDcols=cols1] #Create 1 period lags by year
+
+df_batting_final = as.data.frame(DT_batter2) %>% 
+  select(-c(Runs_share,HR_share,RBI_share, SB_share,OPS_share,AVG_share))
+
+```
+
+
+
+### Creating Training/Test Split  
+We split the data into Training Data (which is used to create the model) and test data (which is used to validate the model)   
+```{r}
+
+set.seed(15674)  # For reproducibility
+# Create index for testing and training data
+inTrain <- createDataPartition(y = df_batting_final$Worth, p = 0.80, list = FALSE)
+# subset pitching data for training
+tr_2021 <- df_batting_final[inTrain,]
+# subset the rest to test and validate trained model
+te_2021 <- df_batting_final[-inTrain,]
+
+nrow(tr_2021)/nrow(df_batting_final) #check if split is 0.8
+
+```
+
+### Treat Missing Data by Imputing Mean Value  
+Vtreat Package in R is excellent for treating data before using for modeling. Additional documentation can be found [here.](https://winvector.github.io/vtreat/index.html)
+```{r}
+treat_plan_2021 <- vtreat::designTreatmentsZ(
+  dframe = tr_2021, # training data
+  varlist = colnames(tr_2021) %>% .[. != "hitting_score1"], # input variables = all training data columns, except random
+  codeRestriction = c("clean", "isBAD", "lev"), # derived variables types (drop cat_P)
+  verbose = FALSE) # suppress messages
+
+#clean stands for cleaned numerical variable, isBAD indicates that a value replacement has occurred (which indicates a missing value in this case), and lev is a binary indicator whether a particular value of that categorical variable was present.  
+
+#### Checking Scoreframe
+
+score_frame <- treat_plan_2021$scoreFrame %>% 
+  select(varName, origName, code)
+
+head(score_frame)
+
+
+tr_treated_2021 <- vtreat::prepare(treat_plan_2021, tr_2021)
+te_treated_2021 <- vtreat::prepare(treat_plan_2021, te_2021)
+
+
+#tr_treated = tr
+#te_treated = te
+
+dim(tr_treated_2021) #note there are dummies for each player and team
+
+```
+
+
+***    
+
+
+### Check Distribution of Training Population  
+The population used for Training should be indicative of Total Population
+```{r}
+
+ggplot2::qplot(tr_treated_2021$Worth, main="Training Set") + geom_histogram(colour="black", fill="grey") + theme_bw()
+
+skewness(tr_treated_2021$Worth) #The skewness is the same as the overall
+
+
+```
+
+
+# Running XGboost Model {.tabset} 
+To keep things simple with modeling, we’ll turn the training data into simple input variables for `caret::train`, dropping the response variable and converting the data frame to a matrix. Documentation for this approach to XGboost can be found [here.](https://www.kaggle.com/pelkoja/visual-xgboost-tuning-with-caret)    
+
+## Tuning the Model
+
+### Initial Non-Tuned Model
+Break the data set into x and y inputs with x being a matrix  
+```{r}
+input_x <- as.matrix(((tr_treated_2021))%>%
+   select(-Worth) %>%                      
+   select(!ends_with ("_isBAD")))
+
+input_y <- tr_treated_2021$Worth
+
+```
+
+XGBoost with Default Hyperparameters    
+The Variable Importance (`caret::varImp(xgb_base_2021, scale = F  )`) from the caret package shows the contribution of each variable to the initial model. As you can see SLG_plus_ (SLG+) takes up much of the importance as it is derived from SLG (one of the key contributors to Worth). These types of variables will be removed during variable selection in the next step.  
+*XGBoost documentation can be found for more general models [here.](https://www.kaggle.com/code/rtatman/machine-learning-with-xgboost-in-r/notebook)*
+
+```{r}
+
+#Defaults for xgboost model
+grid_default <- expand.grid(
+  nrounds = 100,
+  max_depth = 6,
+  eta = 0.3,
+  gamma = 0,
+  colsample_bytree = 1,
+  min_child_weight = 1,
+  subsample = 1
+)
+
+#This is a blank train_control set, this will be updated after
+train_control <- caret::trainControl(
+  method = "none",
+  verboseIter = FALSE, # no training log
+  allowParallel = TRUE # FALSE for reproducible results 
+)
+
+xgb_base_2021 <- caret::train(
+  x = input_x,
+  y = input_y,
+  trControl = train_control,
+  tuneGrid = grid_default,
+  method = "xgbTree",
+  verbose = TRUE
+)
+
+caret::varImp(xgb_base_2021, scale = F  )
+
+
+
+
+```
+
+## Further Variable Selection  
+### Remove redundant and highly correlated variables  
+
+
+Selection Removal Step 1: Check for high correlations  
+Normally, this step is done early, but those steps were reserved for preparing the data  
+
+```{r}
+
+dep_cor1 <- t(as.data.frame(cor(tr_treated_2021[ , colnames(tr_treated_2021) != "Worth"],
+                tr_treated_2021$Worth)))
+dep_cor1 <-
+as.data.frame(t(as.data.frame(dep_cor1)%>% 
+  select(!starts_with("lag")) %>% #remove lag variables
+  select(!contains("_isBAD")))) 
+
+dep_cor1 <- tibble::rownames_to_column(dep_cor1,"VARIABLES")%>% #remove indicators for missing data
+  filter(V1 > 0.70|V1 < -0.5)
+
+dep_cor1
+
+dep_cor2 <- colnames(row_to_names(t(dep_cor1),row_number = 1))
+
+
+
+```
+Let's Remove variables with high correlation to worth metric, and metrics that are calculated after a player's performance (such as WAR)
+
+```{r}
+
+input_x <- as.matrix(((tr_treated_2021))%>%
+   select(-Worth) %>% #Remove dependant variables
+     select (-all_of(dep_cor2),-RAR,-WAR,-WPA,-Spd,-Rep,-BABIP,-Def,-BABIP_plus_,-PA,-AB,-G,-wFB,	-wSL,	-wCT,	-wCH,	-wSF, -X_plus_WPA, -wSB, -BsR,-Pos,-UBR , -wCB #Remove redundant variables or non/weighted variables
+) %>%      
+select(!ends_with ("_isBAD"))) #indicator variable for missing data
+
+input_y <- tr_treated_2021$Worth
+
+
+
+
+
+```
+
+Run the model on the new dataset to make sure the variable importances look fine
+```{r}
+
+#Note Training parameters were set in initial model set up
+xgb_base_2021 <- caret::train(
+  x = input_x,
+  y = input_y,
+  trControl = train_control,
+  tuneGrid = grid_default,
+  method = "xgbTree",
+  verbose = TRUE
+)
+
+caret::varImp(xgb_base_2021, scale = F  )
+
+
+```
+
+
+## Model with new data  
+
+### Tuning All Hyperparameters
+A tune grid allows us to test a large amount of hyper-parameters and find the model with the lowest RMSE for predictions.   
+However, The more values you want to test and the greater the amount of Cross-Fold Validations (`method = "cv"`), the greater the computational time it will take. More information on the specific parameters can be found [here.](https://www.hackerearth.com/practice/machine-learning/machine-learning-algorithms/beginners-tutorial-on-xgboost-parameter-tuning-r/tutorial/)
+
+```{r}
+
+# maximum number of trees
+nrounds <- 1000
+
+# note to start nrounds from 200, as smaller learning rates result in errors so
+# big with lower starting points that they'll mess the scales
+tune_grid <- expand.grid(
+  nrounds = seq(from = 100, to = nrounds, by = 50),
+  eta = c(0.01, 0.025, 0.05, 0.1),
+  max_depth = c(2, 4, 6, 8),
+  gamma = 0,
+  colsample_bytree = 1,
+  min_child_weight = 1,
+  subsample = 1
+)
+
+tune_control <- caret::trainControl(
+  method = "cv", # cross-validation
+  number = 5, # with n folds 
+  ## Note this was # out in the original code
+  #index = createFolds(tr_treated$Id_clean), # fix the folds
+  verboseIter = FALSE, # no training log
+  allowParallel = TRUE # FALSE for reproducible results 
+)
+
+
+
+```
+
+*Running the initial tuning model*  
+```{r}
+#Note I will be timing these runs to give an estimate on how long this model takes to run
+start_time <- Sys.time()
+
+xgb_tune_2021 <- caret::train(
+  x = input_x,
+  y = input_y,
+  trControl = tune_control,
+  tuneGrid = tune_grid,
+  method = "xgbTree",
+  verbose = FALSE
+  ,verbosity = 0
+)
+
+end_time <- Sys.time()
+
+end_time - start_time
+
+```
+
+*Tuning Plot and Variable Importance*
+```{r}
+varImp(xgb_tune_2021, scale = F  ) 
+
+
+# helper function for the plots
+tuneplot <- function(x, probs = .90) {
+  ggplot(x) +
+    coord_cartesian(ylim = c(quantile(x$results$RMSE, probs = probs), min(x$results$RMSE))) +
+    theme_bw()
+}
+
+tuneplot(xgb_tune_2021)
+```
+
+### Fine Tuning Model  
+#### Second Tuning: Maximum Depth and Minimum Child Weight  
+After fixing the learning rate to 0.1 and we’ll also set maximum depth to 3 +-1 (or +2 if max_depth == 2) to experiment a bit around the suggested best tune in previous step. Then, well fix maximum depth and minimum child weigh
+
+```{r}
+tune_grid2 <- expand.grid(
+  nrounds = seq(from = 50, to = nrounds, by = 50),
+  eta = xgb_tune_2021$bestTune$eta,
+  max_depth = ifelse(xgb_tune_2021$bestTune$max_depth == 2,
+    c(xgb_tune_2021$bestTune$max_depth:4),
+    xgb_tune_2021$bestTune$max_depth - 1:xgb_tune_2021$bestTune$max_depth + 1),
+  gamma = 0,
+  colsample_bytree = 1,
+  min_child_weight = c(1, 2, 3),
+  subsample = 1
+)
+
+xgb_tune2_2021 <- caret::train(
+  x = input_x,
+  y = input_y,
+  trControl = tune_control,
+  tuneGrid = tune_grid2,
+  method = "xgbTree",
+  verbose = TRUE
+)
+
+tuneplot(xgb_tune2_2021)
+
+xgb_tune2_2021$bestTune
+
+varImp(xgb_tune2_2021, scale = F  ) 
+```
+
+#### Third Tuning: Column and Row Sampling
+
+```{r}
+
+tune_grid3 <- expand.grid(
+  nrounds = seq(from = 50, to = nrounds, by = 50),
+  eta = xgb_tune_2021$bestTune$eta,
+  max_depth = xgb_tune2_2021$bestTune$max_depth,
+  gamma = 0,
+  colsample_bytree = c(0.4, 0.6, 0.8, 1.0),
+  min_child_weight = xgb_tune2_2021$bestTune$min_child_weight,
+  subsample = c(0.5, 0.75, 1.0)
+)
+
+xgb_tune3_2021 <- caret::train(
+  x = input_x,
+  y = input_y,
+  trControl = tune_control,
+  tuneGrid = tune_grid3,
+  method = "xgbTree",
+  verbose = TRUE
+)
+
+tuneplot(xgb_tune3_2021, probs = .95)
+
+xgb_tune3_2021$bestTune
+
+varImp(xgb_tune3_2021, scale = F  ) 
+
+```
+
+#### Fourth Tuning: Gamma  
+Next, we again pick the best values from previous step, and now will see whether changing the gamma has any effect on the model fit:
+```{r}
+tune_grid4 <- expand.grid(
+  nrounds = seq(from = 50, to = nrounds, by = 50),
+  eta = xgb_tune_2021$bestTune$eta,
+  max_depth = xgb_tune2_2021$bestTune$max_depth,
+  gamma = c(0, 0.05,0.1, 0.2,0.4, 0.5, 0.7, 0.9, 1.0),
+  colsample_bytree = xgb_tune3_2021$bestTune$colsample_bytree,
+  min_child_weight = xgb_tune2_2021$bestTune$min_child_weight,
+  subsample = xgb_tune3_2021$bestTune$subsample
+)
+
+xgb_tune4_2021 <- caret::train(
+  x = input_x,
+  y = input_y,
+  trControl = tune_control,
+  tuneGrid = tune_grid4,
+  method = "xgbTree",
+  verbose = TRUE
+)
+
+tuneplot(xgb_tune4_2021)
+
+xgb_tune4_2021$bestTune
+
+varImp(xgb_tune4_2021, scale = F  ) 
+```
+
+#### Fifth Tuning: Reducing the Learning Rate  
+Now, we have tuned the hyperparameters and can start reducing the learning rate to get to the final model:  
+
+```{r}
+start_time <- Sys.time()
+
+tune_grid5 <- expand.grid(
+  nrounds = seq(from = 100, to = 10000, by = 75),
+   eta = c(0.01, 0.015, 0.025,0.035, 0.05,0.75, 0.1),
+  max_depth = xgb_tune2_2021$bestTune$max_depth,
+  gamma = xgb_tune4_2021$bestTune$gamma,
+  colsample_bytree = xgb_tune3_2021$bestTune$colsample_bytree,
+  min_child_weight = xgb_tune2_2021$bestTune$min_child_weight,
+  subsample = xgb_tune3_2021$bestTune$subsample
+)
+
+
+
+xgb_tune5_2021 <- caret::train(
+  x = input_x,
+  y = input_y,
+  trControl = tune_control,
+  tuneGrid = tune_grid5,
+  method = "xgbTree",
+  verbose = TRUE
+)
+
+#tuneplot(xgb_tune5_2021)
+
+end_time <- Sys.time()
+
+end_time - start_time
+
+xgb_tune5_2021$bestTune
+
+varImp(xgb_tune5_2021, scale = F  ) 
+```
+
+
+#### Fitting Final Model
+
+```{r}
+
+(final_grid_2021 <- expand.grid(
+  nrounds = xgb_tune5_2021$bestTune$nrounds,
+  eta = xgb_tune5_2021$bestTune$eta,
+  max_depth = xgb_tune5_2021$bestTune$max_depth,
+  gamma = xgb_tune5_2021$bestTune$gamma,
+  colsample_bytree = xgb_tune5_2021$bestTune$colsample_bytree,
+  min_child_weight = xgb_tune5_2021$bestTune$min_child_weight,
+  subsample = xgb_tune5_2021$bestTune$subsample
+))
+
+(xgb_model_2021 <- caret::train(
+  x = input_x,
+  y = input_y,
+  trControl = train_control,
+  tuneGrid = final_grid_2021,
+  method = "xgbTree",
+  verbose = TRUE
+))
+
+varImp(xgb_model_2021, scale = F  ) 
+
+```
+
+### Model Performance  
+
+
+#### Checking Model on Test Split Data  
+
+```{r}
+
+
+y_pred_test <- predict(xgb_model_2021, data.matrix(te_treated_2021))
+
+test_stats= cbind((te_treated_2021$Worth),y_pred_test)
+
+test_statsR2 = cor(test_stats[,1],test_stats[,2])^2
+
+print(test_statsR2)
+
+
+y_pred_train <- predict(xgb_model_2021, data.matrix(tr_treated_2021))
+
+train_stats = cbind((tr_treated_2021$Worth),y_pred_train)
+
+train_statsR2 = cor(train_stats[,1],train_stats[,2])^2
+
+print(train_statsR2)
+
+#test dataset
+x <- select(te_treated_2021, -Worth)
+y <- (te_treated_2021$Worth)
+
+(xgb_model_rmse <- ModelMetrics::rmse(y, predict(xgb_model_2021, newdata = x)))
+
+holdout_x <- select(tr_treated_2021, -Worth)
+holdout_y <- tr_treated_2021$Worth
+
+(xgb_model_rmse <- ModelMetrics::rmse(holdout_y, predict(xgb_model_2021, newdata = holdout_x)))
+
+
+```
+
+#### Graphical Representation of Model   
+
+
+```{r}
+
+ggplot2::ggplot() +
+  aes(x = test_stats[,1], y = test_stats[,2]) +
+  geom_jitter() +
+  xlab("Predicted Values") +
+  ylab("Actual Values") +
+  ggtitle("Results of Pitching Model on Test Data")+
+  theme(plot.title = element_text(hjust = 0.5,size = 22,color ="steel blue"))+
+  geom_smooth(method = "lm")
+
+
+
+```
+
+
+# Creating 2022 Projections from Model  {.tabset} 
+
+
+## Re-fit model for Important Variables
+Now that we have an acceptable model, we can use it to create projections for how well we think players should do in 2022 based on their hitting statistics in 2021. First let's reduce
+
+1. Only keep variables with high enough importance in model  
+
+```{r}
+
+
+vip(xgb_model_2021, num_features = 30)  # 10 is the default, 30 gives a visual on the top 30 most important features of the model
+
+unscalevi = vi(xgb_model_2021, method="model") #shows the numbers behind the plot
+
+unscalevi$Importance_perc = with(unscalevi,Importance/sum(Importance)) #adds percentages 
+
+unscalevi # importance by variables
+
+variables_to_keep_2021 = subset(unscalevi, Importance_perc > 0.0010) %>% select(Variable) #Keep Variables that explain at least a small amount [0.1%] of the model. This is a low threshold for inclusion ,but you can adjust this
+
+variables_to_keep_2021b = t(variables_to_keep_2021)
+
+variables_to_keep_2022 = colnames(row_to_names(variables_to_keep_2021b,row_number = 1))
+
+tr_treated_2022 = tr_treated_2021 %>%  select(Worth,one_of(variables_to_keep_2022),starts_with("Team_lev_x_")) #keep modeled important variables along with team indicator variables
+
+te_treated_2022 = te_treated_2021 %>%  select(Worth,one_of(variables_to_keep_2022),starts_with("Team_lev_x_"))
+
+input_x_2022 = as.matrix(select(tr_treated_2022, -Worth))
+
+input_y_2022 = tr_treated_2022$Worth
+
+
+
+```
+
+2. Re-fit model with reduced variable scope  
+
+```{r}
+
+
+(final_grid_2021 <- expand.grid(
+  nrounds = xgb_tune5_2021$bestTune$nrounds,
+  eta = xgb_tune5_2021$bestTune$eta,
+  max_depth = xgb_tune5_2021$bestTune$max_depth,
+  gamma = xgb_tune5_2021$bestTune$gamma,
+  colsample_bytree = xgb_tune5_2021$bestTune$colsample_bytree,
+  min_child_weight = xgb_tune5_2021$bestTune$min_child_weight,
+  subsample = xgb_tune5_2021$bestTune$subsample
+))
+
+(xgb_model_2022 <- caret::train(
+  x = input_x_2022,
+  y = input_y_2022,
+  trControl = train_control,
+  tuneGrid = final_grid_2021,
+  method = "xgbTree",
+  verbose = TRUE
+))
+
+
+vip(xgb_model_2022, num_features = 30)
+
+unscalevi24 = vi(xgb_model_2022, method="model")
+
+unscalevi24$Importance_perc = with(unscalevi24,Importance/sum(Importance)) 
+
+unscalevi24
+
+
+#For anything above breaking_IP we need to create projection table by age or age bucket
+
+#write_csv(unscalevi24,"unscalevi24.csv")
+
+```
+
+
+## Get 2022 list of players
+
+
+```{r}
+
+Latest_2022_playerdata_FP = read_csv("FantasyPros_Fantasy_Baseball_Rankings_ALL.csv")
+
+head(Latest_2022_playerdata_FP)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+</html>
