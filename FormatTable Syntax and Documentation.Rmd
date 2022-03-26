@@ -1,0 +1,37 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+http://haozhu233.github.io/kableExtra/use_kableExtra_with_formattable.html#
+
+https://rdrr.io/cran/kableExtra/f/vignettes/awesome_table_in_html.Rmd
+
+```{r}
+
+#install.packages("formattable")
+
+ft_dt <- mtcars[1:5, 1:4]
+ft_dt$car <- row.names(ft_dt)
+row.names(ft_dt) <- NULL
+ft_dt$mpg <- color_tile("white", "orange")(ft_dt$mpg)
+ft_dt$cyl <- cell_spec(ft_dt$cyl, angle = (1:5)*60, 
+                      background = "red", color = "white", align = "center")
+ft_dt$disp <- ifelse(
+  ft_dt$disp > 200,
+  cell_spec(ft_dt$disp, color = "red", bold = T),
+  cell_spec(ft_dt$disp, color = "green", italic = T)
+)
+ft_dt$hp <- color_bar("lightgreen")(ft_dt$hp)
+ft_dt <- ft_dt[c("car", "mpg", "cyl", "disp", "hp")]
+
+kbl(ft_dt, escape = F) %>%
+  kable_paper("hover", full_width = F) %>%
+  column_spec(5, width = "3cm") %>%
+  add_header_above(c(" ", "Hello" = 2, "World" = 2))
+
+
+
+
+```
+
