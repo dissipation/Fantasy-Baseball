@@ -17,28 +17,40 @@ output:
 
 <p>
 
-Latest Projections using XGboost
+Projections using Hypertuned model through XGboost
 
 </p>
 
 <p>
 
-Estimated with R Studio
+All data is from [FanGraphs.](https://www.fangraphs.com/) I have no affiliation with FanGraphs, but please consider contributing to their [website](https://plus.fangraphs.com/shop/) if you found this project informative.
 
 </p>
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = 'C:\Users\Admin\Documents\Learning Python Folder1\Python Essence Training\Fantasy-Baseball')
+knitr::opts_knit$set(root.dir = 'C:/Users/Admin/Documents/Learning Python Folder1/Python Essence Training/Fantasy-Baseball')
 options(knitr.table.format = "html") 
 options(digits=2)
+options(scipen = 100)
 ```
 
-# Project Scope
 
-This project is designed to showcase how Using a Rank Based Worth System values Fantasy Baseball Players
+# Project Scope {.tabset}
 
-INSERT TABLE of Projections, etc, to summarize project  
+## Objective
+
+This project is designed to showcase how Using a Percentile Based Worth System values Fantasy Baseball Players through a Inning Pitched (IP) weighted projection
+
+The Categories used for prediction valuation are year-end rankings for the following metrics:
+-   HRs
+-   Runs
+-   RBIs
+-   Batting Average
+-   Stolen Bases
+
+![](IntroChart6x6.png)
+
 
 ***  
 
@@ -179,7 +191,7 @@ What are some issues with the data?
 
 ***  
 
-### **Cleanly Changing all Variables that are characters to numeric.**
+### Cleanly Changing all Variables that are characters to numeric.  
 There are several ways to do this, we will identify the variables we want to change that are mis-identified. `parse_number` can be used to pull numbers from these variables. Additional ways to tackle this can be found [here](https://stackoverflow.com/questions/8329059/how-to-convert-character-of-percentage-into-numeric-in-r)
 
 ```{r}
@@ -454,8 +466,7 @@ df_batting_init2 =  df_batting_init %>%
     OPS_share = 0,
     Worth = Runs_share+HR_share+RBI_share+SB_share+AVG_share+OPS_share
     ) %>% 
-  ungroup() %>% 
-select(-R_PA,-HR_PA,-RBI_PA,-SB_PA,-AVG,-OPS)
+  ungroup() 
 
 ```
 
@@ -511,8 +522,7 @@ df_batting_init2021 %>%
 ### Remove Variables which are based off current hitting numbers    
 Not all variables can be used for predictive modeling.   
 ```{r}
-df_batting_init3 = df_batting_init2 %>% 
-  select(-`HR/FB`, -Dol,-`Age Rng`,PA,-(H_PA:PH_PA),-Name)
+df_batting_init3 = df_batting_init2
 ```
 
 Lag Share Variables to use for predictive modeling. The variables that we created for the Worth metric must also be removed. This will create the final dataset.
@@ -531,7 +541,9 @@ anscols = paste("lag", cols1, sep="_")
 DT_batter2[, (anscols) := data.table::shift(.SD, 1, NA, "lag"),by ='playerid', .SDcols=cols1] #Create 1 period lags by year
 
 df_batting_final = as.data.frame(DT_batter2) %>% 
-  select(-c(Runs_share,HR_share,RBI_share, SB_share,OPS_share,AVG_share))
+  select(-c(Runs_share,HR_share,RBI_share, SB_share,OPS_share,AVG_share))%>% 
+  select(-`HR/FB`, -Dol,-`Age Rng`,PA,-(H_PA:PH_PA),-Name) #%>% 
+#select(-R_PA,-HR_PA,-RBI_PA,-SB_PA,-AVG,-OPS)
 
 ```
 
@@ -574,6 +586,19 @@ head(score_frame)
 
 tr_treated_2021 <- vtreat::prepare(treat_plan_2021, tr_2021)
 te_treated_2021 <- vtreat::prepare(treat_plan_2021, te_2021)
+
+
+Total_dataset1_untreat = as.data.frame(DT_batter2) %>% select(-Name)
+
+treat_plan_2021 <- vtreat::designTreatmentsZ(
+  dframe = Total_dataset1_untreat, # training data
+  varlist = colnames(Total_dataset1_untreat) %>% .[. != "hitting_score1"], # input variables = all training data columns, except random
+  codeRestriction = c("clean", "isBAD", "lev"), # derived variables types (drop cat_P)
+  verbose = FALSE) # suppress messages
+
+
+total_treated_2021_hitting <- vtreat::prepare(treat_plan_2021, Total_dataset1_untreat)
+
 
 
 #tr_treated = tr
@@ -1084,21 +1109,173 @@ unscalevi24
 
 ```
 
+------------------------------------------------------------------------
+# 2022 Projections Full  
 
-## Get 2022 list of players
+First let's prepare a file for predicting based on our model object
+
+```{r}
+
+
+variableslag5xb= row_to_names(as.data.frame(t(variables_to_keep_2022)),row_number = 1)  %>% select (starts_with("lag"))
+
+variables_nolag5xb = (owmr::remove_prefix(variableslag5xb,"lag" , sep = "_"))
+
+Data_Predict_2022a5xb = total_treated_2021_hitting %>% select (one_of(colnames(variables_nolag5xb)),Season,playerid)
+
+colnames(Data_Predict_2022a5xb) <- paste0("lag_", colnames(Data_Predict_2022a5xb))
+
+Data_Predict_2022b5xb = total_treated_2021_hitting %>% select (one_of(colnames(variables_nolag5xb)))
+colnames(Data_Predict_2022b5xb) = colnames(variableslag5xb)
+
+variables_to_keep_2022_nolag5xb = total_treated_2021_hitting %>% select(one_of(variables_to_keep_2022),Season,playerid,starts_with("Team_lev_x_"))%>% select(-one_of(colnames(Data_Predict_2022b5xb)))
+
+
+Data_predict_20225xb = sqldf(
+  "
+  select a.*,b.* from
+  Data_Predict_2022a5xb a,
+  variables_to_keep_2022_nolag5xb b
+  on b.playerid = a.lag_playerid
+  and b.Season = a.lag_Season
+  "
+) %>% select(-lag_playerid,lag_Season) %>%
+  filter(Season == 2021) %>% 
+  select(one_of(variables_to_keep_2022),starts_with("Team_lev_x_"))
+
+
+
+```
+
+------------------------------------------------------------------------
+
+## Create Predictions for Model
+
+### Run Projections on Players who Played in 2021
+
+This is the raw prediction score per IP for each pitcher
+
+```{r}
+
+hitting_predictions5xb = as.data.frame(predict(xgb_model_2022,Data_predict_20225xb))
+
+names(hitting_predictions5xb) = c("Predict_Score")
+
+Data_predict_2022_w_hitting_Predictions5xb = cbind(Data_predict_20225xb,hitting_predictions5xb) %>% select(playerid,Predict_Score)
+
+head(Data_predict_2022_w_hitting_Predictions5xb)
+
+```
+
+------------------------------------------------------------------------
 
 
 ```{r}
 
-Latest_2022_playerdata_FP = read_csv("FantasyPros_Fantasy_Baseball_Rankings_ALL.csv")
+Latest_2022_hittingdata_FP = read_csv("FanGraph_Fantasy_Baseball_Hitting.csv")
 
-head(Latest_2022_playerdata_FP)
+Latest_2022_hittingdata_FP
 
 
 ```
 
 
 
+
+------------------------------------------------------------------------
+
+```{r, warning = False}
+
+
+hitting_Data_NonAdj_Projections5xb = sqldf(
+  "
+  select a.*,b.Predict_Score
+  from Latest_2022_hittingdata_FP a 
+  left join 
+  Data_predict_2022_w_hitting_Predictions5xb b
+  on a.playerid = b.playerid
+  "
+) %>% filter(ADP<370 | is.na(Predict_Score)==F)
+
+
+hitting_Data_Adj_Projections5xb =
+hitting_Data_NonAdj_Projections5xb %>% 
+  mutate(
+    Avg_PA = 300,
+    AdjPredict_Score_raw = ifelse(is.na(Predict_Score),NA,Predict_Score*(PA/Avg_PA)),
+    max_predscore= max(AdjPredict_Score_raw,na.rm = T),
+    AdjPredict_Score = ifelse (is.na(AdjPredict_Score_raw),NA,AdjPredict_Score_raw *100/max_predscore),
+    WAR_rank = order(order(rank(WAR,ties.method = 'average'),decreasing = TRUE)),
+    AdjPredict_Score_Rank = order(order(rank(AdjPredict_Score,ties.method = 'average'),decreasing = TRUE))-sum(is.na(AdjPredict_Score))
+  ) %>% select (Name,ADP,WAR, WAR_rank,AdjPredict_Score ,AdjPredict_Score_Rank)
+
+
+  
+
+ggplot2::qplot(hitting_Data_Adj_Projections5xb$AdjPredict_Score, main="Predictions") + geom_histogram(colour="black", fill="grey") + theme_bw()
+
+
+```
+
+------------------------------------------------------------------------
+
+# 2022 Projections Full
+
+## Table of hitting Projections (Players who Didn't Play in 2021 - Recieve an NA)
+
+AdjPredict_Score are normalized to 100
+
+```{r}
+
+tableexport =
+hitting_Data_Adj_Projections5xb %>%
+  arrange (ADP,WAR) %>% 
+  kbl() %>% 
+ kable_material(c("striped", "hover","condensed","responsive"),full_width = F,fixed_thead = T)
+
+save_kable(tableexport,file = "hitting5x5.html")
+
+#tableexport
+
+
+
+```
+
+This is a better formatted Table
+
+```{r , warning=FALSE}
+
+
+ft_dt <- hitting_Data_Adj_Projections5xb[1:nrow(hitting_Data_Adj_Projections5xb), 1:ncol(hitting_Data_Adj_Projections5xb)]
+
+ft_dt$ADP <- color_tile("white", "red")(ft_dt$ADP)
+
+ft_dt$WAR <- color_bar("lightblue")(ft_dt$WAR)
+
+ft_dt$Predict_Score <- cell_spec(round(ft_dt$AdjPredict_Score,1), angle = (1:5)*0, 
+                     background = "green", color = "white", align = "center")
+
+ft_dt$WAR_Rank <- color_tile("green","orange")(ft_dt$WAR_rank)
+
+ft_dt$Predict_Rank <- color_tile("green","orange")(ft_dt$AdjPredict_Score_Rank)
+
+ft_dt <- ft_dt[c("Name", "ADP", "WAR", "Predict_Score","WAR_Rank","Predict_Rank")] %>% arrange (desc(ADP))
+
+
+table_export = 
+kbl(ft_dt, escape = F) %>% 
+ kable_material(c("striped", "hover","condensed","responsive"),full_width = F,fixed_thead = T) %>%   column_spec(6, width = "3cm") %>%
+  add_header_above(c(" ", "Scores" = 3, "Ranks" = 2))
+
+save_kable(table_export,file = "hitting5x5_updated.html")
+  
+table_export  
+
+
+
+
+
+```
 
 
 
