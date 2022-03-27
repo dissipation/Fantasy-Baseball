@@ -642,7 +642,7 @@ head(score_frame)
 
 tr_treated_2021 <- vtreat::prepare(treat_plan_2021, tr_2021)
 te_treated_2021 <- vtreat::prepare(treat_plan_2021, te_2021)
-total_treated_2021 <- vtreat::prepare(treat_plan_2021, df_batting_final)
+total_treated_2021_hitting <- vtreat::prepare(treat_plan_2021, df_batting_final)
 
 #tr_treated = tr
 #te_treated = te
