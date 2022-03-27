@@ -826,7 +826,7 @@ tune_control <- caret::trainControl(
   ## Note this was # out in the original code
   #index = createFolds(tr_treated$Id_clean), # fix the folds
   verboseIter = FALSE, # no training log
-  allowParallel = TRUE # FALSE for reproducible results 
+  allowParallel = FALSE # FALSE for reproducible results 
 )
 
 

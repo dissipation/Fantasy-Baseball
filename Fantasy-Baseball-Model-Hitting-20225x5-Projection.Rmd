@@ -300,8 +300,7 @@ FDG_Team4 = FDG_Team3 %>%
 ***  
 
 ### Creating Variables Normalized by Year  
-Some Variables will need to be normalized by Plate Appearances (PA) if they aren't a percentage already. Remaining Variables are percentages or indicies so will not need to be transformed
-
+Some Variables will need to be normalized by Innings_Pitched (IP) if they aren't a percentage already. Remaining Variables are percentages or indices so will not need to be transformed. The full data dictionary for these variables can be found on FanGraph's website [here.](https://library.fangraphs.com/pitching/complete-list-pitching/) for pitching variables and [here.](https://library.fangraphs.com/offense/offensive-statistics-list/) for hitting variables.  
 ```{r}
 
 Batter_data4 = Batter_data3 %>% 
@@ -387,10 +386,10 @@ FDG_Team5 = FDG_Team4 %>%
 ***  
 
 ### Creating Lagged Variables  
-There are several ways to lag a dataset **BY GROUP**.    
-* `Dplyr` way is [here.](https://statisticsglobe.com/create-lagged-variable-by-group-in-r).   
-* While data.table (the method used below) is [here.](https://stackoverflow.com/questions/26291988/how-to-create-a-lag-variable-within-each-group)  
 
+There are several ways to lag a dataset **BY GROUP**.\
+\* `Dplyr` way is [here.](https://statisticsglobe.com/create-lagged-variable-by-group-in-r).\
+\* The `data.table` (the method used below) is [here.](https://stackoverflow.com/questions/26291988/how-to-create-a-lag-variable-within-each-group)  
 ```{r}
 #Note we will only be lagging the player level data, as the previous year's team performance shouldn't impact current performance
 
@@ -440,15 +439,15 @@ nrow(df_batting_init) - nrow(Batter_data6) #check if any rows are duplicated
 ***  
 
 
-# Creating Rankings for Players Based On Percentiles {.tabset}  
-We can use Percentile based ranking to get rankings for players from the 2021 season.  
+# Creating Rankings for Players Based On Percentiles {.tabset}
 
-## Worth of each stat  
+We can use Percentile based ranking to get rankings for players from the 2021 season.
 
-### Calculating past performance   
+## Worth of each stat
 
-Each player goes from a 0% to 100% on each percentile stat that is used for creating a scoring opportunity. All data is already normalized by plate appearances, but must now be ranked for each year.   
+### Calculating past performance
 
+Each player goes from a 0% to 100% on each percentile stat that is used for creating a scoring opportunity. Data is not yet normalized by PA as certain stats such as HRs and SBs will be worth more when we do.\
 
 ```{r}
 
@@ -476,7 +475,7 @@ As the chart below shows, the data is roughly normal.
 
 skewness((df_batting_init2$Worth))
 
-ggplot2::qplot(df_batting_init2$Worth, main="Total Dataset") + geom_histogram(colour="black", fill="grey") + theme_bw()
+ggplot2::qplot(df_batting_init2$Worth, main="Total Dataset") + geom_histogram(colour="black", fill="lime green")
 
 min(df_batting_init2$Worth)
 
@@ -489,11 +488,12 @@ shapiro.test(df_batting_init2$Worth)
 
 
 ***  
+## 2021 Player Rankings - Per PA performance
 
+### 2021 Player Rankings - Top Worth Player
 
-## 2021 Player Rankings  
-### 2021 Player Rankings - Top Worth Players with OPS
-Total Rankings for the players (Using 5x5 Scoring) can be found [here]()  
+There are per PA rankings. Players like Byron Buxton which had a great per PA score but can't stay healthy for a season will be adjusted down.
+
 ```{r,warning=FALSE}
 
 options(digits=2)
@@ -517,15 +517,20 @@ df_batting_init2021 %>%
 ***  
 
 
-# Creating Model File   
+# Creating Model File {.tabset}  
+
 ## Additional Data Prep  
-### Remove Variables which are based off current hitting numbers    
-Not all variables can be used for predictive modeling.   
+
+### Remove Variables which are based off current hitting numbers  
+
+Not all variables can be used for predictive modeling.  Variables that go into the percentile ranking or are non-normalized metrics created after the fact (such as `WAR` - Wins above Replacement or `RE24`) should be removed. However, metrics that are normalized by a per pitch basis (such as `HR/FB%+`) can remain as we expect batters to have similar performance in these metrics one year out.  
+
 ```{r}
+#Creating a new dataset to keep original intact
 df_batting_init3 = df_batting_init2
 ```
 
-Lag Share Variables to use for predictive modeling. The variables that we created for the Worth metric must also be removed. This will create the final dataset.
+Lagged Percentile (`_share`) Variables can be used for predictive modeling. However since these variables were created for the Worth metric they must also be removed for modeling purposes.  
 
 ```{r}
 
@@ -540,10 +545,12 @@ cols1 = (c('Runs_share','HR_share','RBI_share', 'SB_share','OPS_share','AVG_shar
 anscols = paste("lag", cols1, sep="_")
 DT_batter2[, (anscols) := data.table::shift(.SD, 1, NA, "lag"),by ='playerid', .SDcols=cols1] #Create 1 period lags by year
 
+#names(DT_batter2)
+
 df_batting_final = as.data.frame(DT_batter2) %>% 
   select(-c(Runs_share,HR_share,RBI_share, SB_share,OPS_share,AVG_share))%>% 
-  select(-`HR/FB`, -Dol,-`Age Rng`,PA,-(H_PA:PH_PA),-Name) #%>% 
-#select(-R_PA,-HR_PA,-RBI_PA,-SB_PA,-AVG,-OPS)
+  select(-(G:AVG),-(OBP:BABIP),-(wOBA:Dol),-(`wRC+`:REW),-(`WPA/LI`),-(wFB:wSF),-BsR,-(Def:wGDP),-(`wCH (pi)`:`wCH/C (pi)`),-(`AVG+`),-(`OBP+`:`BABIP+`),-(H_PA:PH_PA)) 
+
 
 ```
 
@@ -566,7 +573,8 @@ nrow(tr_2021)/nrow(df_batting_final) #check if split is 0.8
 ```
 
 ### Treat Missing Data by Imputing Mean Value  
-Vtreat Package in R is excellent for treating data before using for modeling. Additional documentation can be found [here.](https://winvector.github.io/vtreat/index.html)
+Vtreat Package in R is excellent for treating data before using for modeling. Additional documentation can be found [here.](https://winvector.github.io/vtreat/index.html)  
+*Note: The treatment plan also fixes variables names  like`HR/FB%+` (which R doesn't always handle the best) to `HR_slash_FB_percent_plus_`*  
 ```{r}
 treat_plan_2021 <- vtreat::designTreatmentsZ(
   dframe = tr_2021, # training data
@@ -616,7 +624,7 @@ dim(tr_treated_2021) #note there are dummies for each player and team
 The population used for Training should be indicative of Total Population
 ```{r}
 
-ggplot2::qplot(tr_treated_2021$Worth, main="Training Set") + geom_histogram(colour="black", fill="grey") + theme_bw()
+ggplot2::qplot(tr_treated_2021$Worth, main="Training Set") + geom_histogram(colour="black", fill="limegreen") + theme_bw()
 
 skewness(tr_treated_2021$Worth) #The skewness is the same as the overall
 
@@ -680,12 +688,12 @@ caret::varImp(xgb_base_2021, scale = F  )
 
 ```
 
-## Further Variable Selection  
-### Remove redundant and highly correlated variables  
+## Further Variable Selection
 
+### Remove redundant and highly correlated variables
 
-Selection Removal Step 1: Check for high correlations  
-Normally, this step is done early, but those steps were reserved for preparing the data  
+Selection Removal Step 1: Check for high correlations\
+Normally, this step is done early, but those steps were reserved for preparing the data
 
 ```{r}
 
@@ -706,14 +714,13 @@ dep_cor2 <- colnames(row_to_names(t(dep_cor1),row_number = 1))
 
 
 ```
-Let's Remove variables with high correlation to worth metric, and metrics that are calculated after a player's performance (such as WAR)
+Let's Remove variables with high correlation to worth metric (such as `wFB/C`)
 
 ```{r}
 
 input_x <- as.matrix(((tr_treated_2021))%>%
-   select(-Worth) %>% #Remove dependant variables
-     select (-all_of(dep_cor2),-RAR,-WAR,-WPA,-Spd,-Rep,-BABIP,-Def,-BABIP_plus_,-PA,-AB,-G,-wFB,	-wSL,	-wCT,	-wCH,	-wSF, -X_plus_WPA, -wSB, -BsR,-Pos,-UBR , -wCB #Remove redundant variables or non/weighted variables
-) %>%      
+   select(-Worth) %>% #Remove dependent variable
+     select (-all_of(dep_cor2) ) %>%      
 select(!ends_with ("_isBAD"))) #indicator variable for missing data
 
 input_y <- tr_treated_2021$Worth
