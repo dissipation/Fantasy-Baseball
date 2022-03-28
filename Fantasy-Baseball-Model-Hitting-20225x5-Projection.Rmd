@@ -29,7 +29,7 @@ All data is from [FanGraphs.](https://www.fangraphs.com/) I have no affiliation 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = 'C:/Users/Admin/Documents/Learning Python Folder1/Python Essence Training/Fantasy-Baseball')
+knitr::opts_knit$set(root.dir = 'C:/Users/Admin/Documents/Learning Python Folder1/Python Essence Training/Fantasy-Baseball/Data')
 options(knitr.table.format = "html") 
 options(digits=2)
 options(scipen = 100)
@@ -123,8 +123,6 @@ FDG_Team2 <- FDG_Team %>%
 
 skim(FDG_Team2) %>%  
   tibble::as_tibble()
-
-
 ```
 ***  
 
@@ -166,9 +164,6 @@ ggplot(Batter_data_dist, aes(Season, Avg_HR)) +
   geom_col()+
   ggtitle("Average Home Runs by Year")+
   theme(plot.title = element_text(hjust = 0.5,size = 22,color ="steel blue"))
-
-
-
 ```
 
 ***  
@@ -217,7 +212,6 @@ skim(Batter_data2) %>%
 
 
 #Logical variables are R's best guess, in our case they are all NA's and will be removed
-
 ```
 
 The same can be done for the Team Data that is loaded  
@@ -242,9 +236,6 @@ skim(FDG_Team3) %>%
   as_tibble() %>% 
   group_by(skim_type) %>% 
   count()
-
-
-
 ```
 ***  
 
@@ -268,8 +259,6 @@ Player_cols_to_keep = colnames(janitor::row_to_names(Player_cols_to_keep_transpo
 #Only keep the columns designated to have over 30% of their data populated or greater
 Batter_data3 = Batter_data2 %>% 
   select(one_of(Player_cols_to_keep)) 
-
-
 ```
 
 
@@ -510,7 +499,6 @@ df_batting_init2021 %>%
   filter (Worth>3.9) %>% 
   kbl() %>% 
  kable_material(c("striped", "hover","condensed","responsive"),full_width = F,fixed_thead = T)
-
 ```
 
 
@@ -627,8 +615,6 @@ The population used for Training should be indicative of Total Population
 ggplot2::qplot(tr_treated_2021$Worth, main="Training Set") + geom_histogram(colour="black", fill="limegreen") + theme_bw()
 
 skewness(tr_treated_2021$Worth) #The skewness is the same as the overall
-
-
 ```
 
 
@@ -883,7 +869,6 @@ tuneplot(xgb_tune3_2021, probs = .95)
 xgb_tune3_2021$bestTune
 
 varImp(xgb_tune3_2021, scale = F  ) 
-
 ```
 
 #### Fourth Tuning: Gamma  
@@ -1033,9 +1018,6 @@ ggplot2::ggplot() +
   ggtitle("Results of Pitching Model on Test Data")+
   theme(plot.title = element_text(hjust = 0.5,size = 22,color ="steel blue"))+
   geom_smooth(method = "lm")
-
-
-
 ```
 
 
@@ -1109,6 +1091,7 @@ unscalevi24$Importance_perc = with(unscalevi24,Importance/sum(Importance))
 
 unscalevi24
 
+save(xgb_model_2022,file = '2022_Hitting5x5_Model.Rdata')
 
 #For anything above breaking_IP we need to create projection table by age or age bucket
 

@@ -29,7 +29,7 @@ All data is from [FanGraphs.](https://www.fangraphs.com/) I have no affiliation 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = 'C:/Users/Admin/Documents/Learning Python Folder1/Python Essence Training/Fantasy-Baseball')
+knitr::opts_knit$set(root.dir = 'C:/Users/Admin/Documents/Learning Python Folder1/Python Essence Training/Fantasy-Baseball/Data')
 options(knitr.table.format = "html") 
 options(digits=2)
 options(scipen = 100)

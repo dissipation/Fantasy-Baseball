@@ -29,7 +29,7 @@ All data is from [FanGraphs.](https://www.fangraphs.com/) I have no affiliation 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = 'C:/Users/Admin/Documents/Learning Python Folder1/Python Essence Training/Fantasy-Baseball')
+knitr::opts_knit$set(root.dir = 'C:/Users/Admin/Documents/Learning Python Folder1/Python Essence Training/Fantasy-Baseball/Data')
 options(knitr.table.format = "html") 
 options(digits=2)
 options(scipen = 100)
@@ -48,7 +48,7 @@ The Categories used for prediction valuation are year-end rankings for the follo
 -   RBIs
 -   Batting Average
 -   Stolen Bases
--   On Base Percentage (OBP)
+-   On Base Percentage + Slugging (OPS)
 
 ![](IntroChart6x6.png)
 
@@ -1110,6 +1110,7 @@ unscalevi24$Importance_perc = with(unscalevi24,Importance/sum(Importance))
 
 unscalevi24
 
+save(xgb_model_2022,file = '2022_Hitting6x6_Model.Rdata')
 
 #For anything above breaking_IP we need to create projection table by age or age bucket
 
