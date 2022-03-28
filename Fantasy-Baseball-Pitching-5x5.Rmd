@@ -1254,6 +1254,8 @@ Latest_2022_pitchingdata_FP
 
 ------------------------------------------------------------------------
 
+As you can see from the chart below there aren't many elite pitchers in the 87+ Predict score range.  
+
 ```{r, warning = False}
 
 

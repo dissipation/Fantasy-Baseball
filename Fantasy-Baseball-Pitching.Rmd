@@ -1247,7 +1247,6 @@ Latest_2022_pitchingdata_FP
 
 ```{r, warning = False}
 
-fffffff
 
 
 Pitching_Data_NonAdj_Projections = sqldf(
