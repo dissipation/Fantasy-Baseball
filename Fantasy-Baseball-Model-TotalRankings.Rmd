@@ -47,7 +47,7 @@ After Running the Pitching Specific and Hitting Specific models we can consolida
 ![](IntroChartTotal.png)
 
 
-# Total 5x5 Rankings {.tabset}
+# Total 5x5 Rankings {.tabset .tabset-pills}
 ## 5X5 Data Prep
 ```{r}
 
@@ -96,9 +96,6 @@ Final5x = na.omit(Final5xb)
 
 ## Table of Projections (Players who Didn't Play in 2021 are Excluded)
 
-AdjPredict_Score are normalized to 100
-
-
 ```{r}
 
 
@@ -138,7 +135,7 @@ table_export
 
 ------------------------------------------------------------------------
 
-# Total 6x6 Rankings {.tabset}
+# Total 6x6 Rankings {.tabset .tabset-pills}
 ## 6x6 Rankings
 ```{r}
 
@@ -184,9 +181,6 @@ Final6x = na.omit(Final6xb) %>% filter(AdjPredict_Score_Rank >0)
 ------------------------------------------------------------------------
 
 ## Table of Projections (Players who Didn't Play in 2021 are Excluded)
-
-AdjPredict_Score are normalized to 100
-
 
 ```{r}
 
