@@ -36,7 +36,7 @@ options(digits=2)
 options(scipen = 100)
 ```
 
-# Project Scope {.tabset}
+# Project Scope {.tabset .tabset-pills}
 
 ## Objective
 
@@ -56,7 +56,7 @@ The Categories used for prediction valuation are year-end rankings for the follo
 
 ------------------------------------------------------------------------
 
-# Processing the Data {.tabset}
+# Processing the Data {.tabset .tabset-pills}
 
 ## Getting Data Into R
 
@@ -443,7 +443,7 @@ nrow(df_pitching_init) - nrow(pitcher_data6) #check if any rows are duplicated
 
 ------------------------------------------------------------------------
 
-# Creating Rankings for Players Based On Percentiles {.tabset}
+# Creating Rankings for Players Based On Percentiles {.tabset .tabset-pills}
 
 We can use Percentile based ranking to get rankings for players from the 2021 season.
 
@@ -530,7 +530,7 @@ df_pitching_init2_raw %>%
 
 
 df_pitching_init2021_raw %>%
-  filter (Worth>3.9) %>% 
+  filter (Worth>3.5) %>% 
   kbl() %>% 
  kable_material(c("striped", "hover","condensed","responsive"),full_width = F,fixed_thead = T)
 ```
@@ -563,7 +563,7 @@ df_pitching_init2021 %>%
 
 ------------------------------------------------------------------------
 
-# Creating Model File {.tabset}  
+# Creating Model File {.tabset .tabset-pills}  
 
 ## Additional Data Prep  
 
@@ -575,8 +575,8 @@ Not all variables can be used for predictive modeling.  Variables that go into t
 #Be careful about RS - Run Support and RS/9
 
 #Creating a new dataset to keep original intact
-df_pitching_init3 = df_pitching_init2
-
+df_pitching_init3 = df_pitching_init2 %>% 
+  select (-Name)
 ```
 
 
@@ -596,7 +596,7 @@ anscols = paste("lag", cols1, sep="_")
 DT_pitcher2[, (anscols) := data.table::shift(.SD, 1, NA, "lag"),by ='playerid', .SDcols=cols1] #Create 1 period lags by year
 
 df_pitching_final = as.data.frame(DT_pitcher2) %>% 
-  select(-c(Wins_share,SO_share,SV_share, ERA_share,WHIP_share,HLD_share,Name))%>%
+  select(-c(Wins_share,SO_share,SV_share, ERA_share,WHIP_share,HLD_share))%>%
 select(-FIP,-(RAR:WPA),-(wFB:wCH),-(`ERA-`:`xFIP-`),
        -SIERA,-(`RA9-WAR`:`Age Rng`),-kwERA,-(`wCH (pi)`:`wSL (pi)`),-(`K/9+`:`HR/FB%+`)) %>% select(-W,-SO,-SV,-HLD,-W_IP,-SO_IP,-SV_IP,-WHIP,-ERA,-HLD_IP)
 
@@ -679,7 +679,7 @@ skewness(tr_treated_2021$Worth)
 
 ------------------------------------------------------------------------
 
-# Running XGboost Model {.tabset}
+# Running XGboost Model {.tabset .tabset-pills}
 
 To keep things simple with modeling, we'll turn the training data into simple input variables for `caret::train`, dropping the response variable and converting the data frame to a matrix. Documentation for this approach to XGboost can be found [here.](https://www.kaggle.com/pelkoja/visual-xgboost-tuning-with-caret)
 
@@ -1101,7 +1101,7 @@ ggplot2::ggplot() +
 
 ------------------------------------------------------------------------
 
-# Creating 2022 Projections from Model {.tabset}
+# Creating 2022 Projections from Model {.tabset .tabset-pills}
 
 ## Re-fit model for Important Variables
 
@@ -1174,7 +1174,13 @@ unscalevi24$Importance_perc = with(unscalevi24,Importance/sum(Importance))
 
 unscalevi24
 
+# Save work for later prediction
+
 save(xgb_model_2022,file = '2022_Pitching5x5_Model.Rdata')
+
+pitching5x5 = xgb_model_2022
+
+pitchinginput = input_x_2022
 
 ```
 
@@ -1278,8 +1284,9 @@ Pitching_Data_NonAdj_Projections5x %>%
     max_predscore= max(AdjPredict_Score_raw,na.rm = T),
     AdjPredict_Score = ifelse (is.na(AdjPredict_Score_raw),NA,AdjPredict_Score_raw *100/max_predscore),
     WAR_rank = order(order(rank(WAR,ties.method = 'average'),decreasing = TRUE)),
-    AdjPredict_Score_Rank = order(order(rank(AdjPredict_Score,ties.method = 'average'),decreasing = TRUE))-sum(is.na(AdjPredict_Score))
-  ) %>% select (Name,ADP,WAR, WAR_rank,AdjPredict_Score ,AdjPredict_Score_Rank)
+    AdjPredict_Score_Rank = order(order(rank(AdjPredict_Score,ties.method = 'average'),decreasing = TRUE))-sum(is.na(AdjPredict_Score)),
+        Ranks_Above_ADP = ADP - AdjPredict_Score_Rank
+  ) %>% select (Name,ADP,WAR, WAR_rank,AdjPredict_Score ,AdjPredict_Score_Rank,Ranks_Above_ADP)
 
 
   
@@ -1318,30 +1325,41 @@ This is a better formatted Table
 ```{r}
 
 
-ft_dt <- Pitching_Data_Adj_Projections5x[1:nrow(Pitching_Data_Adj_Projections5x), 1:ncol(Pitching_Data_Adj_Projections5x)]
+
+ft_dt <- Pitching_Data_Adj_Projections5x[1:nrow(Pitching_Data_Adj_Projections5x), 1:ncol(Pitching_Data_Adj_Projections5x)] %>% 
+  filter(AdjPredict_Score_Rank>0)%>%  arrange((AdjPredict_Score_Rank))
 
 ft_dt$ADP <- color_tile("white", "red")(ft_dt$ADP)
 
 ft_dt$WAR <- color_bar("lightblue")(ft_dt$WAR)
 
-ft_dt$Predict_Score <- cell_spec(round(ft_dt$AdjPredict_Score,1), angle = (1:5)*0, 
-                     background = "green", color = "white", align = "center")
+ft_dt$AdjPredict_Score<- color_bar("lightblue")(ft_dt$AdjPredict_Score)
 
 ft_dt$WAR_Rank <- color_tile("green","orange")(ft_dt$WAR_rank)
 
-ft_dt$Predict_Rank <- color_tile("green","orange")(ft_dt$AdjPredict_Score_Rank)
+ft_dt$Predict_Rank <- color_tile("green","orange")(ft_dt$AdjPredict_Score_Rank) 
 
-ft_dt <- ft_dt[c("Name", "ADP", "WAR", "Predict_Score","WAR_Rank","Predict_Rank")] %>% arrange (desc(ADP))
+
+ft_dt$Ranks_Above_ADP <- 
+  ifelse(
+  ft_dt$Ranks_Above_ADP < 0,
+  cell_spec(round(ft_dt$Ranks_Above_ADP,2), color = "red", italic = T),
+  cell_spec(round(ft_dt$Ranks_Above_ADP,2), color = "green", italic = T)
+)
+
+
+ft_dt2 <- ft_dt[c("Name", "ADP", "WAR", "AdjPredict_Score", "WAR_Rank","Predict_Rank","Ranks_Above_ADP")]
+
 
 
 table_export = 
-kbl(ft_dt, escape = F) %>% 
+kbl(ft_dt2, escape = F) %>% 
  kable_material(c("striped", "hover","condensed","responsive"),full_width = F,fixed_thead = T) %>%   column_spec(6, width = "3cm") %>%
-  add_header_above(c(" ", "Scores" = 3, "Ranks" = 2))
-
+  add_header_above(c(" ", "Scores" = 3, "Ranks" = 2," "))
 save_kable(table_export,file = "Pitching5x5_updated.html")
   
 table_export  
+
 
 
 

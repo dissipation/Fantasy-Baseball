@@ -1,0 +1,178 @@
+---
+title: "Pitcher 5x5 Deep Dives"
+author: "Darshan Patel"
+date: "`r Sys.Date()`"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: sandstone
+    highlight: tango
+    fig_caption: true
+    df_print: paged
+---
+
+<html>
+
+<p>
+
+Projections using Hypertuned model through XGboost
+
+</p>
+
+<p>
+
+All data is from [FanGraphs.](https://www.fangraphs.com/) I have no affiliation with FanGraphs, but please consider contributing to their [website](https://plus.fangraphs.com/shop/) if you found this project informative.
+
+</p>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 'C:/Users/Admin/Documents/Learning Python Folder1/Python Essence Training/Fantasy-Baseball/Models/')
+options(knitr.table.format = "html") 
+options(digits=2)
+options(scipen = 100)
+```
+
+# Project Scope {.tabset .tabset-pills}
+
+## Objective
+
+Take a look at Pitcher's Sabermetric Performance Metrics from 2021
+
+
+# Data Loading {.tabset .tabset-pills}
+
+## Load Libraries
+
+<p style="color:black;">
+
+*First we need to load the packages that R needs to run the analysis*
+
+</p>  
+
+```{r load library,message = FALSE,warning=FALSE}
+library(sqldf) #SQL in R
+library(skimr) #Summaries and useful for removing low % data
+library(ggplot2) #Plotting Functions
+library(plyr) #slightly deprecated data cleaning
+library(dplyr) #slightly updated data cleaning
+library(tidyverse) #tidyverse data cleaning universe
+library(caret) #wrapper for creating, tuning and validating models
+library(xgboost) #package for creating regression tree model
+library(vtreat) # useful package for treating data before modeling 
+library(Matrix) #creating matricies for xgboost
+library(mgcv)
+library(moments) #for measuring skewness
+library(data.table) #alternative to dplyr we use to create lags
+library(pdp) #partial dependence graphs
+library(vip) #variable importance 
+library(grid) #put multiple plots on one grid
+library(gridExtra) #additional grid functionality
+library(janitor) #one function used to clean transposed data set
+library(ggpubr) #for qq plot 
+library(owmr) #Removing Prefixes
+library(kableExtra) # formatting HTML Tables
+library(formattable) # formatting HTML Tables
+library(wrapr)
+
+```
+
+***  
+## Load Inputs
+
+### Load Datasets
+*Refer to 5x5 Pitching Notebook to create these datasets*
+```{r}
+#Data
+total_pitching_data = total_treated_2021_pitching
+#Projections
+Pitching_Projections = na.omit(Pitching_Data_Adj_Projections5x %>% 
+  arrange(AdjPredict_Score_Rank))
+
+Pitching_Projections
+```
+
+***  
+
+### Load Model
+*Refer to 5x5 Pitching Notebook to create this model*
+
+```{r}
+
+#pitching5x5 is the name of our model
+
+vip(pitching5x5, num_features = 30)
+
+pitching_importance = vi(pitching5x5, method="model") %>% 
+  mutate(
+    sum_IMP = sum(Importance),
+    Importance_perc = Importance/sum_IMP
+  ) %>% select (Variable, Importance_perc)
+
+pitching_importance
+
+```
+
+***  
+
+# Partial Dependence Plots of Top Variables {.tabset .tabset-pills}  
+
+Create Function to make Partial Dependence Plots  
+```{r}
+
+
+#pitching_importance plot function
+
+pdp_function <- function(df,var1,output)
+{
+  pdp::partial(
+  pitching5x5,
+  pred.var = var1,
+  ice = T,
+  center = T,
+  plot = T,
+  alpha = .1,
+  plot.engine = "ggplot2",
+  train = pitchinginput
+)  
+}
+  
+
+```
+
+***  
+  
+## Look at Top 4 Plots  
+```{r,warning=FALSE,message=FALSE}
+p1 = pdp_function(var1 = "Pitches_IP")  
+p2 = pdp_function(var1 = "TBF_IP")   
+p3 = pdp_function(var1 = "E_minus_F")  
+p4 = pdp_function(var1 = "TTO_percent_")  
+
+gridExtra::grid.arrange(p1,p2,p3,p4)
+```
+## Look at next 4 top plots
+```{r,warning=FALSE}
+
+p1 = pdp_function(var1 = "BABIP")  
+p2 = pdp_function(var1 = "K_slash_9")   
+p3 = pdp_function(var1 = "lag_SV_share")  
+p4 = pdp_function(var1 = "Strikes_IP")  
+
+gridExtra::grid.arrange(p1,p2,p3,p4)
+```
+
+***  
+
+
+# Player Profiles {.tabset .tabset-pills}
+
+## League Averages
+
+##
+
+
+***  
+

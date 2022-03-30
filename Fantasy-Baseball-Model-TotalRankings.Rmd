@@ -1,5 +1,5 @@
 ---
-title: "Welcome to my 2022 Projections for Pitchers 6x6"
+title: "Welcome to my 2022 Overall Projections"
 author: "Darshan Patel"
 date: "`r Sys.Date()`"
 output: 
@@ -134,11 +134,6 @@ kbl(ft_dt2, escape = F) %>%
 save_kable(table_export,file = "Total5x5_updated.html")
   
 table_export  
-
-
-
-
-
 ```
 
 ------------------------------------------------------------------------
@@ -151,7 +146,7 @@ table_export
 
 
 Pitching_Data_Adj_Projections6x_Total =
-Pitching_Data_NonAdj_Projections %>% 
+Pitching_Data_NonAdj_Projections6x %>% 
   mutate(
     Avg_IP = 60,
     Adj_factor = 0.84,
@@ -183,8 +178,6 @@ Final6xb = Final6xa %>%
   ) %>% select(-max_predscore,-AdjPredict_Score_raw,-AdjPredict_Score)
 
 Final6x = na.omit(Final6xb) %>% filter(AdjPredict_Score_Rank >0)
-
-
 ```
 
 
@@ -230,10 +223,6 @@ kbl(ft_dt2, escape = F) %>%
 save_kable(table_export,file = "Total6x6_updated.html")
   
 table_export  
-
-
-
-
 ```
 
 
