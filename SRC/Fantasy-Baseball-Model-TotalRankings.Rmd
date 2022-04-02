@@ -139,9 +139,6 @@ table_export
 ## 6x6 Rankings
 ```{r}
 
-
-
-
 Pitching_Data_Adj_Projections6x_Total =
 Pitching_Data_NonAdj_Projections6x %>% 
   mutate(
@@ -219,6 +216,289 @@ save_kable(table_export,file = "Total6x6_updated.html")
 table_export  
 ```
 
+# Adding Position Information {.tabset .tabset-pills}
+
+## Loading all Position Files with updated ADP
+
+```{r, message=FALSE}
+
+FirstB = read_csv('FanGraphs Leaderboard_1B_ATC_3_31.csv') %>%
+  mutate (
+#    Position = '1B',
+    Position1b = 1
+  ) %>% select (Name, Team, PA, playerid, ADP, WAR, Position1b) %>% 
+  mutate(
+  WAR_Sum = sum(WAR),
+  Cume_WAR_sum = cumsum(WAR),
+  Positional_Scarcity = (WAR_Sum - Cume_WAR_sum)/WAR_Sum
+) %>% select (-WAR_Sum, -Cume_WAR_sum)
+
+
+SecondB = read_csv('FanGraphs Leaderboard_2B_ATC_3_31.csv') %>%
+  mutate (
+#    Position = '2B',
+    Position2b = 1
+  ) %>% select (Name, Team, PA, playerid, ADP, WAR,Position2b) %>% 
+  mutate(
+  WAR_Sum = sum(WAR),
+  Cume_WAR_sum = cumsum(WAR),
+  Positional_Scarcity = (WAR_Sum - Cume_WAR_sum)/WAR_Sum
+) %>% select (-WAR_Sum, -Cume_WAR_sum)
+
+ThirdB = read_csv('FanGraphs Leaderboard_3B_ATC_3_31.csv') %>%
+  mutate (
+#    Position = '3B',
+    Position3b = 1
+  ) %>% select (Name, Team, PA, playerid, ADP, WAR,Position3b) %>% 
+  mutate(
+  WAR_Sum = sum(WAR),
+  Cume_WAR_sum = cumsum(WAR),
+  Positional_Scarcity = (WAR_Sum - Cume_WAR_sum)/WAR_Sum
+) %>% select (-WAR_Sum, -Cume_WAR_sum)
+
+
+SS = read_csv('FanGraphs Leaderboard_SS_ATC_3_31.csv') %>%
+  mutate (
+#    Position = 'SS',
+    PositionSS = 1
+  ) %>% select (Name, Team, PA, playerid, ADP, WAR, PositionSS) %>% 
+  mutate(
+  WAR_Sum = sum(WAR),
+  Cume_WAR_sum = cumsum(WAR),
+  Positional_Scarcity = (WAR_Sum - Cume_WAR_sum)/WAR_Sum
+) %>% select (-WAR_Sum, -Cume_WAR_sum)
+
+
+CF = read_csv('FanGraphs Leaderboard_CF_ATC_3_31.csv') %>%
+  mutate (
+#    Position = 'CF',
+    PositionCF = 1
+  ) %>% select (Name, Team, PA, playerid, ADP, WAR, PositionCF) %>% 
+  mutate(
+  WAR_Sum = sum(WAR),
+  Cume_WAR_sum = cumsum(WAR),
+  Positional_Scarcity = (WAR_Sum - Cume_WAR_sum)/WAR_Sum
+) %>% select (-WAR_Sum, -Cume_WAR_sum)
+
+
+
+LF = read_csv('FanGraphs Leaderboard_LF_ATC_3_31.csv') %>%
+  mutate (
+#    Position = 'LF',
+    PositionLF = 1
+  ) %>% select (Name, Team, PA, playerid, ADP, WAR, PositionLF) %>% 
+  mutate(
+  WAR_Sum = sum(WAR),
+  Cume_WAR_sum = cumsum(WAR),
+  Positional_Scarcity = (WAR_Sum - Cume_WAR_sum)/WAR_Sum
+) %>% select (-WAR_Sum, -Cume_WAR_sum)
+
+
+
+RF = read_csv('FanGraphs Leaderboard_RF_ATC_3_31.csv') %>%
+  mutate (
+#    Position = 'RF',
+    PositionRF = 1
+  ) %>% select (Name, Team, PA, playerid, ADP, WAR, PositionRF) %>%  
+  mutate(
+  WAR_Sum = sum(WAR),
+  Cume_WAR_sum = cumsum(WAR),
+  Positional_Scarcity = (WAR_Sum - Cume_WAR_sum)/WAR_Sum
+) %>% select (-WAR_Sum, -Cume_WAR_sum)
+
+OF = read_csv('FanGraphs Leaderboard_OF_ATC_3_31.csv') %>%
+  mutate (
+#    Position = 'OF',
+    PositionOF = 1
+  ) %>% select (Name, Team, PA, playerid, ADP, WAR, PositionOF) %>% 
+  mutate(
+  WAR_Sum = sum(WAR),
+  Cume_WAR_sum = cumsum(WAR),
+  Positional_Scarcity = (WAR_Sum - Cume_WAR_sum)/WAR_Sum
+) %>% select (-WAR_Sum, -Cume_WAR_sum)
+
+DH = read_csv('FanGraphs Leaderboard_DH_ATC_3_31.csv') %>%
+  mutate (
+#    Position = 'DH',
+    PositionDH = 1
+  ) %>% select (Name, Team, PA, playerid, ADP, WAR, PositionDH) %>% 
+  mutate(
+  WAR_Sum = sum(WAR),
+  Cume_WAR_sum = cumsum(WAR),
+  Positional_Scarcity = (WAR_Sum - Cume_WAR_sum)/WAR_Sum
+) %>% select (-WAR_Sum, -Cume_WAR_sum)
+
+
+Catchers = read_csv('FanGraphs Leaderboard_Catchers_ATC_3_31.csv') %>%
+  mutate (
+#    Position = 'C',
+    PositionC = 1
+  ) %>% select (Name, Team, PA, playerid, ADP, WAR, PositionC) %>% 
+  mutate(
+  WAR_Sum = sum(WAR),
+  Cume_WAR_sum = cumsum(WAR),
+  Positional_Scarcity = (WAR_Sum - Cume_WAR_sum)/WAR_Sum
+) %>% select (-WAR_Sum, -Cume_WAR_sum)
+
+
+SP = read_csv('FanGraphs Leaderboard_StartingPitchers_ATC_3_31.csv') %>%
+  mutate (
+    Position = 'SP',
+    PositionSP = 1
+  ) %>% select (Name, Team, IP, playerid, ADP, WAR, PositionSP) %>% 
+  mutate(
+  WAR_Sum = sum(WAR),
+  Cume_WAR_sum = cumsum(WAR),
+  Positional_Scarcity = (WAR_Sum - Cume_WAR_sum)/WAR_Sum
+) %>% select (-WAR_Sum, -Cume_WAR_sum)
+
+
+RP = read_csv('FanGraphs Leaderboard_RelievingPitchers_ATC_3_31.csv') %>%
+  mutate (
+    Position = 'RP',
+    PositionRP = 1
+  ) %>% select (Name, Team, IP, playerid, ADP, WAR, PositionRP) %>% 
+  mutate(
+  WAR_Sum = sum(WAR),
+  Cume_WAR_sum = cumsum(WAR),
+  Positional_Scarcity = (WAR_Sum - Cume_WAR_sum)/WAR_Sum
+)%>% select (-WAR_Sum, -Cume_WAR_sum)
+
+
+
+
+
+```
+
+
+## Merge data into one file
+### Batter Classification
+Note Positional Scarcity is based on ATC projected WAR for that position. All positional scarcities are mins
+
+```{r}
+
+
+FanGraph_Positions_Batter = rbind.fill(FirstB,SecondB,ThirdB,SS,RF,CF,LF,OF,Catchers,DH)
+
+
+FanGraph_Positions_Batter[is.na(FanGraph_Positions_Batter)] <- 0
+
+lookuptable = 
+FanGraph_Positions_Batter %>% 
+  arrange(playerid, Positional_Scarcity) %>% 
+  group_by(Name, Team, PA, playerid, ADP, WAR) %>%
+    summarize (
+              Positional_Scarcity = min(Positional_Scarcity),
+               Position1b = max(Position1b),
+               Position2b = max(Position2b),
+               Position3b = max(Position3b),
+               PositionSS = max(PositionSS),
+               PositionRF = max(PositionRF),
+               PositionLF = max(PositionLF),
+               PositionCF = max(PositionCF),
+               PositionOF = max(PositionOF),
+               PositionDH = max(PositionDH),
+               PositionC = max(PositionC)
+               ) %>% 
+mutate (
+  Position = case_when(
+    Position1b == 1 & sum(Position1b,Position2b,Position3b,PositionSS,PositionC,PositionOF) == 1  ~ '1B',
+    Position2b == 1 & sum(Position1b,Position2b,Position3b,PositionSS,PositionC,PositionOF) == 1  ~ '2B',
+    Position3b == 1 & sum(Position1b,Position2b,Position3b,PositionSS,PositionC,PositionOF) == 1  ~ '3B',
+    PositionSS == 1 & sum(Position1b,Position2b,Position3b,PositionSS,PositionC,PositionOF) == 1  ~ 'SS',
+    PositionOF == 1 & sum(Position1b,Position2b,Position3b,PositionSS,PositionC,PositionOF) == 1  ~ 'OF',
+    PositionC == 1 & sum(Position1b,Position2b,Position3b,PositionSS,PositionC,PositionOF) == 1  ~ 'C',
+    PositionDH == 1 & sum(Position1b,Position2b,Position3b,PositionSS,PositionC,PositionOF,PositionDH) == 1  ~ 'DH',
+    sum(Position1b,Position2b,Position3b,PositionSS) > 1 ~ 'IF',
+     PositionC == 1 & sum(Position1b,Position2b,Position3b,PositionSS,PositionC,PositionOF) > 1 ~ 'C,Oth',
+    PositionOF == 1 & sum(Position1b,Position2b,Position3b,PositionSS,PositionOF) > 1 ~ 'OF,Oth',
+    TRUE ~ 'Multiple'
+  )
+  
+) %>% ungroup %>% filter(PA > 49)
+
+
+
+hitting_Data_NonAdj_Projections_Total = sqldf(
+  "
+  select a.*, b.Predict_Score
+  from
+  lookuptable a
+  left join
+  hitting_Data_NonAdj_Projections5xb b
+  on a.playerid = b.playerid
+  "
+)
+
+hitting_Data_NonAdj_Projections_Total
+
+
+
+FanGraph_Positions_Batter_Total =
+hitting_Data_NonAdj_Projections_Total %>% 
+  mutate(
+    Avg_PA = mean(PA),
+    AdjPredict_Score_raw = ifelse(is.na(Predict_Score),NA,Predict_Score*(PA/Avg_PA))
+  ) %>% select(-Avg_PA)
+
+
+
+
+
+```
+
+### Pitching
+
+```{r}
+
+FanGraph_Positions_Pitcher = rbind.fill(SP,RP)
+
+lookuptable2 = 
+FanGraph_Positions_Pitcher %>% 
+  arrange(playerid, Positional_Scarcity) %>% 
+  group_by(Name, Team, IP, playerid, ADP, WAR) %>%
+    summarize (
+              Positional_Scarcity = min(Positional_Scarcity),
+               PositionSP = max(PositionSP),
+               PositionRP = max(PositionRP)
+    ) %>% 
+mutate (
+  Position = case_when(
+    PositionSP == 1 ~ 'SP',
+  PositionRP == 1 ~ 'RP',
+    TRUE ~ 'SP,RP'
+  )
+) %>% ungroup %>% filter(IP > 19)
+
+
+pitching_Data_NonAdj_Projections_Total = sqldf(
+  "
+  select a.*, b.Predict_Score
+  from
+  lookuptable2 a
+  left join
+  Pitching_Data_NonAdj_Projections5x b
+  on a.playerid = b.playerid
+  "
+)
+
+
+
+pitching_Data_NonAdj_Projections_Total
+
+
+
+FanGraph_Positions_Pitcher_Total =
+pitching_Data_NonAdj_Projections_Total %>% 
+  mutate(
+    Avg_IP = mean(IP),
+    AdjPredict_Score_raw = ifelse(is.na(Predict_Score),NA,Predict_Score*(IP/Avg_IP))
+  )%>% select(-Avg_IP)
+
+
+
+
+```
 
 
 
