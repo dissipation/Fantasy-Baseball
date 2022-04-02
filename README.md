@@ -8,7 +8,8 @@
 
 # Scoring Metrics
 * In 5x5 Roto ranking values for each of the categories are not clear
-* However, both Per Plate Appearance (PA) and Inning Pitched (IP) based values are approximately normal (according to an eye and Wilks Shapiro Test) ![SWTEST](https://github.com/dissipation/Fantasy-Baseball/blob/master/Images%20for%20Readme/WilksShapiro.PNG)
+* However, both Per Plate Appearance (PA) and Inning Pitched (IP) based values are approximately normal (according to an eye and Wilks Shapiro Test)   
+![SWTEST](https://github.com/dissipation/Fantasy-Baseball/blob/master/Images%20for%20Readme/WilksShapiro.PNG)
     * This can be used to help predict per IP and PA values.
     ![NORMALITY](https://github.com/dissipation/Fantasy-Baseball/blob/master/Images%20for%20Readme/NormalGraphForGH.PNG)
 * Once predicted, these values are bumped up multiplying by projected PAs or IPs (normalized by the league means)
