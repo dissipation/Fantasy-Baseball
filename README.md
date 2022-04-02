@@ -8,9 +8,9 @@
 
 # Scoring Metrics
 * In 5x5 Roto ranking values for each of the categories are not clear
-* However, both Per Plate Appearance (PA) and Inning Pitched (IP) based values are approximately normal (according to an eye and Wilks Shapiro Test)[SWTEST](https://github.com/dissipation/Fantasy-Baseball/blob/master/Images%20for%20Readme/WilksShapiro.PNG)
+* However, both Per Plate Appearance (PA) and Inning Pitched (IP) based values are approximately normal (according to an eye and Wilks Shapiro Test) ![SWTEST](https://github.com/dissipation/Fantasy-Baseball/blob/master/Images%20for%20Readme/WilksShapiro.PNG)
     * This can be used to help predict per IP and PA values.
-    [NORMALITY](https://github.com/dissipation/Fantasy-Baseball/blob/master/Images%20for%20Readme/NormalGraphForGH.PNG)
+    ![NORMALITY](https://github.com/dissipation/Fantasy-Baseball/blob/master/Images%20for%20Readme/NormalGraphForGH.PNG)
 * Once predicted, these values are bumped up multiplying by projected PAs or IPs (normalized by the league means)
     * For overall rankings, total pitcher model scores are further normalized to equal total hitter model scores as both should be valued equally in a 5x5 category league
-* The model has a R-Squared of 0.71 for the pitching model and 0.91 for the hitting model. Pitching model actual vs predicted: [ModelPerf](https://github.com/dissipation/Fantasy-Baseball/blob/master/Images%20for%20Readme/ModelPerfForGh.PNG)
+* The model has a R-Squared of 0.71 for the pitching model and 0.91 for the hitting model. Pitching model actual vs predicted: ![ModelPerf](https://github.com/dissipation/Fantasy-Baseball/blob/master/Images%20for%20Readme/ModelPerfForGh.PNG)
