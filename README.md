@@ -1,9 +1,8 @@
-# Fantasy-Baseball
-* Check out the [website](https://dissipation.github.io/DarshDSPortfolio/) assocated with this repository!
-* The goal of this project is to create an accurate way to predict MLB player performance based on historical sabermetric data
+## Check out the [website](https://dissipation.github.io/DarshDSPortfolio/) assocated with this repository!
+# The goal of this project is to create an accurate way to predict MLB player performance based on historical sabermetric data
 * Fangraphs has a wealth of data that can be leveraged to get predict player performance
 * The final projections also incorporate [ATC WAR Projections](https://www.fangraphs.com/projections.aspx?pos=all&stats=bat&type=atc&team=0&lg=all&players=0) for comparison/sanity checking and Positional Scarcity Calculations:
-[Testing](Images for Readme/ImageforGH.PNG)
+![Projections](https://github.com/dissipation/Fantasy-Baseball/blob/master/Images%20for%20Readme/ImageforGH.PNG)
 
 # Scoring Metrics
 * In 5x5 Roto ranking values for each of the categories are not clear
