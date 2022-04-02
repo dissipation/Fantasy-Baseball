@@ -42,6 +42,17 @@ My model scores for a player are `Model_Score`. *Note:Pitching Scores are normal
 ## Ranks above ADP should be for total
 
 
+hitting_Data_NonAdj_Projections_Total = sqldf(
+  "
+  select a.*, b.Predict_Score
+  from
+  lookuptable a
+  left join
+  hitting_Data_NonAdj_Projections5xb b
+  on a.playerid = b.playerid
+  "
+)
+
 FanGraph_Positions_Batter_Total =
 hitting_Data_NonAdj_Projections_Total %>% 
   mutate(
@@ -50,7 +61,20 @@ hitting_Data_NonAdj_Projections_Total %>%
   ) %>% select(-Avg_PA)
 
 
+
+pitching_Data_NonAdj_Projections_Total = sqldf(
+  "
+  select a.*, b.Predict_Score
+  from
+  lookuptable2 a
+  left join
+  Pitching_Data_NonAdj_Projections5x b
+  on a.playerid = b.playerid
+  "
+)
+
 Adjustment_factor= (sum(FanGraph_Positions_Batter_Total$WAR,na.rm = T))/(sum(pitching_Data_NonAdj_Projections_Total$WAR,na.rm = T))
+
 
 FanGraph_Positions_Pitcher_Total =
 pitching_Data_NonAdj_Projections_Total %>% 
