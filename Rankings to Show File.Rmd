@@ -28,7 +28,7 @@ Positional Scarcity is determined by [ATC WAR Projections](https://www.fangraphs
 ***    
 
 # **WAR PROJECTIONS AND MODEL SCORES** {.tabset .tabset-pills}   
-Players that have an `NA` for `Model_Score` did not play in the MLB in 2021. 
+Players that have an `NA` for `Model_Score` did not play in the MLB in 2021 and have a negative or zero Position Rank.  
 ```{r}
 ### Fill in code
 ```
@@ -791,7 +791,7 @@ table_export
 
 
 ## Pitchers by Position {.tabset .tabset-pills}  
-My non-normalized model score predictions are `Model_Score`.      
+My non-normalized model scores for a player are `Model_Score`.    
  
 ### All P  
 
